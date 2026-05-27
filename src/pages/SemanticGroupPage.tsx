@@ -6,7 +6,12 @@ import { toast } from 'sonner'
 import {
   atomicCheckerApi,
   atomicRulesApi,
+  getAtomicRuleCode,
+  getAtomicRuleSemanticCode,
   getErrorMessage,
+  getSemanticRuleBusinessIntent,
+  getSemanticRuleCode,
+  getSemanticRuleSummary,
   parseJsonText,
   rewriteApi,
   semanticCheckerApi,
@@ -75,14 +80,14 @@ export function SemanticGroupPage() {
 
   const semanticRule = semanticRuleQuery.data
   const atomicRules = atomicRulesQuery.data || []
-  const semanticRuleCode = semanticRule?.semanticRuleCode
-  const childAtomicRules = atomicRules.filter((rule) => !semanticRuleCode || rule.semanticRuleCode === semanticRuleCode)
+  const semanticRuleCode = semanticRule ? getSemanticRuleCode(semanticRule) : ''
+  const childAtomicRules = atomicRules.filter((rule) => !semanticRuleCode || getAtomicRuleSemanticCode(rule) === semanticRuleCode)
   const atomicResultByRule = new Map((atomicResultsQuery.data || []).map((result) => [result.targetRuleId, result]))
   const selectedAtomicRule = childAtomicRules.find((rule) => rule.id === selectedAtomicRuleId) || null
 
-  const loadAtomicRuleForEdit = (rule: { id: string; content?: string | null }) => {
+  const loadAtomicRuleForEdit = (rule: { id: string; content?: string | null; llmOutputJson?: string | null }) => {
     setSelectedAtomicRuleId(rule.id)
-    const parsed = parseJsonText(rule.content)
+    const parsed = parseJsonText(rule.content || rule.llmOutputJson)
     setEditText(typeof parsed === 'string' ? parsed : JSON.stringify(parsed, null, 2))
   }
 
@@ -123,7 +128,7 @@ export function SemanticGroupPage() {
     <div className="space-y-5">
       <PageTitle
         title="Semantic Rule Group"
-        description={semanticRule?.semanticRuleCode || semanticRuleId}
+        description={semanticRule ? getSemanticRuleCode(semanticRule) : semanticRuleId}
         actions={
           <>
             <Link
@@ -148,11 +153,11 @@ export function SemanticGroupPage() {
           <div className="grid gap-4 p-4 lg:grid-cols-2">
             <div>
               <p className="text-xs font-semibold uppercase text-[#667085]">Business Intent</p>
-              <p className="mt-2 text-sm text-[#344054]">{semanticRule?.businessIntent || '-'}</p>
+              <p className="mt-2 text-sm text-[#344054]">{getSemanticRuleBusinessIntent(semanticRule) || '-'}</p>
             </div>
             <div>
               <p className="text-xs font-semibold uppercase text-[#667085]">Summary</p>
-              <p className="mt-2 text-sm text-[#344054]">{semanticRule?.summary || '-'}</p>
+              <p className="mt-2 text-sm text-[#344054]">{getSemanticRuleSummary(semanticRule) || '-'}</p>
             </div>
             <div className="lg:col-span-2">
               <p className="text-xs font-semibold uppercase text-[#667085]">Latest Semantic Checker Result</p>
@@ -218,7 +223,7 @@ export function SemanticGroupPage() {
                   return (
                     <tr key={rule.id} className="border-b border-[#edf1f6] last:border-0">
                       <td className="px-4 py-3">
-                        <p className="font-medium text-[#172033]">{rule.atomicRuleCode}</p>
+                        <p className="font-medium text-[#172033]">{getAtomicRuleCode(rule)}</p>
                         <p className="text-xs text-[#667085]">v{rule.atomicVersion ?? 0}</p>
                       </td>
                       <td className="px-4 py-3"><StatusPill value={rule.status} /></td>
@@ -242,7 +247,7 @@ export function SemanticGroupPage() {
       <Panel>
         <PanelHeader
           title="Human Edit"
-          description={selectedAtomicRule ? selectedAtomicRule.atomicRuleCode : 'Select an atomic rule to edit'}
+          description={selectedAtomicRule ? getAtomicRuleCode(selectedAtomicRule) : 'Select an atomic rule to edit'}
           actions={
             <Button variant="primary" onClick={() => editMutation.mutate()} disabled={!selectedAtomicRule || editMutation.isPending}>
               <Save className="h-4 w-4" aria-hidden="true" />
@@ -261,7 +266,7 @@ export function SemanticGroupPage() {
             >
               <option value="">Select a rule</option>
               {childAtomicRules.map((rule) => (
-                <option key={rule.id} value={rule.id}>{rule.atomicRuleCode}</option>
+                <option key={rule.id} value={rule.id}>{getAtomicRuleCode(rule)}</option>
               ))}
             </Select>
           </Label>

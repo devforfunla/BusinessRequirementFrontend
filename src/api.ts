@@ -69,26 +69,38 @@ export type SkillSummary = {
 
 export type SemanticRule = {
   id: string
-  semanticRuleCode: string
+  semanticRuleCode?: string | null
+  llmSemanticRuleCode?: string | null
   workflowId: string
+  documentId?: string | null
   semanticVersion?: number | null
   changeType?: string | null
   approvalStatus: string
   summary?: string | null
+  llmSummary?: string | null
   businessIntent?: string | null
+  llmBusinessIntent?: string | null
+  llmSection?: string | null
+  llmOutputJson?: string | null
   createdAt?: string | null
   updatedAt?: string | null
 }
 
 export type AtomicRule = {
   id: string
-  atomicRuleCode: string
+  atomicRuleCode?: string | null
+  llmAtomicRuleCode?: string | null
   workflowId: string
   atomicVersion?: number | null
   changeType?: string | null
   status: string
   semanticRuleCode?: string | null
+  llmSemanticRuleCode?: string | null
+  semanticRuleId?: string | null
   content?: string | null
+  llmOutputJson?: string | null
+  llmSummary?: string | null
+  llmSection?: string | null
   humanInterventionId?: string | null
   createdAt?: string | null
   updatedAt?: string | null
@@ -458,4 +470,31 @@ export function parseJsonText(value?: string | null) {
   } catch {
     return value
   }
+}
+
+export function getSemanticRuleCode(rule?: SemanticRule | null) {
+  return rule?.semanticRuleCode || rule?.llmSemanticRuleCode || rule?.id || '-'
+}
+
+export function getSemanticRuleSummary(rule?: SemanticRule | null) {
+  return rule?.summary || rule?.llmSummary || semanticJsonField(rule?.llmOutputJson, 'summary') || null
+}
+
+export function getSemanticRuleBusinessIntent(rule?: SemanticRule | null) {
+  return rule?.businessIntent || rule?.llmBusinessIntent || semanticJsonField(rule?.llmOutputJson, 'business_intent') || null
+}
+
+export function getAtomicRuleCode(rule?: AtomicRule | null) {
+  return rule?.atomicRuleCode || rule?.llmAtomicRuleCode || rule?.id || '-'
+}
+
+export function getAtomicRuleSemanticCode(rule?: AtomicRule | null) {
+  return rule?.semanticRuleCode || rule?.llmSemanticRuleCode || '-'
+}
+
+function semanticJsonField(value: string | null | undefined, fieldName: string) {
+  const parsed = parseJsonText(value)
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+  const fieldValue = (parsed as JsonRecord)[fieldName]
+  return typeof fieldValue === 'string' && fieldValue.trim() ? fieldValue : null
 }

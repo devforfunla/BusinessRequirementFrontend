@@ -5,6 +5,9 @@ import { CheckCircle2, History, RefreshCw, ShieldCheck, XCircle } from 'lucide-r
 import { toast } from 'sonner'
 import {
   getErrorMessage,
+  getSemanticRuleBusinessIntent,
+  getSemanticRuleCode,
+  getSemanticRuleSummary,
   isJobRunning,
   jobsApi,
   semanticCheckerApi,
@@ -179,10 +182,6 @@ export function SemanticStagePage() {
                 <ShieldCheck className="h-4 w-4" aria-hidden="true" />
                 Run Semantic Checker
               </Button>
-              <Button onClick={() => approveAllMutation.mutate()} disabled={approveAllMutation.isPending || semanticRules.length === 0}>
-                <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-                Approve All
-              </Button>
             </>
           }
         />
@@ -193,7 +192,16 @@ export function SemanticStagePage() {
       </Panel>
 
       <Panel>
-        <PanelHeader title="Semantic Rules" description={`${approvedSemanticCount}/${semanticRules.length} approved`} />
+        <PanelHeader
+          title="Semantic Rules"
+          description={`${approvedSemanticCount}/${semanticRules.length} approved`}
+          actions={
+            <Button onClick={() => approveAllMutation.mutate()} disabled={approveAllMutation.isPending || semanticRules.length === 0}>
+              <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+              Approve All
+            </Button>
+          }
+        />
         {semanticRules.length === 0 && !semanticRulesQuery.isLoading ? (
           <div className="p-4"><EmptyState title="No semantic rules yet" description="Run semantic maker from the workflows page." /></div>
         ) : (
@@ -215,14 +223,17 @@ export function SemanticStagePage() {
                     <tr key={rule.id} className="border-b border-[#edf1f6] last:border-0">
                       <td className="px-4 py-3">
                         <Link className="font-medium text-[#175cd3] hover:underline" to={`/workflows/${encodeURIComponent(workflowId)}/semantic/${encodeURIComponent(rule.id)}`}>
-                          {rule.semanticRuleCode}
+                          {getSemanticRuleCode(rule)}
                         </Link>
-                        <p className="text-xs text-[#667085]">v{rule.semanticVersion ?? 0} {rule.changeType || ''}</p>
+                        <p className="text-xs text-[#667085]">
+                          v{rule.semanticVersion ?? 0}
+                          {rule.llmSection ? ` - ${rule.llmSection}` : ''}
+                        </p>
                       </td>
                       <td className="px-4 py-3"><StatusPill value={rule.approvalStatus} /></td>
                       <td className="px-4 py-3"><StatusPill value={result?.llmIsPassing || 'NOT_CHECKED'} /></td>
                       <td className="max-w-xl px-4 py-3 text-[#475467]">
-                        <p className="line-clamp-2">{rule.summary || rule.businessIntent || '-'}</p>
+                        <p className="line-clamp-2">{getSemanticRuleSummary(rule) || getSemanticRuleBusinessIntent(rule) || '-'}</p>
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex flex-wrap gap-2">

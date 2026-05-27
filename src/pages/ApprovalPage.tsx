@@ -2,7 +2,7 @@ import { Link, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CheckCircle2, RefreshCw, RotateCcw } from 'lucide-react'
 import { toast } from 'sonner'
-import { atomicCheckerApi, atomicRulesApi, getErrorMessage } from '../api'
+import { atomicCheckerApi, atomicRulesApi, getAtomicRuleCode, getAtomicRuleSemanticCode, getErrorMessage } from '../api'
 import { useAppStore } from '../store'
 import { formatDate } from '../utils'
 import { Button, EmptyState, ErrorNotice, JsonBlock, PageTitle, Panel, PanelHeader, StatusPill } from '../components/ui'
@@ -86,10 +86,10 @@ export function ApprovalPage() {
                   return (
                     <tr key={rule.id} className="border-b border-[#edf1f6] align-top last:border-0">
                       <td className="px-4 py-3">
-                        <p className="font-medium text-[#172033]">{rule.atomicRuleCode}</p>
+                        <p className="font-medium text-[#172033]">{getAtomicRuleCode(rule)}</p>
                         <p className="text-xs text-[#667085]">v{rule.atomicVersion ?? 0}</p>
                       </td>
-                      <td className="px-4 py-3 text-[#475467]">{rule.semanticRuleCode || '-'}</td>
+                      <td className="px-4 py-3 text-[#475467]">{getAtomicRuleSemanticCode(rule)}</td>
                       <td className="px-4 py-3"><StatusPill value={rule.status} /></td>
                       <td className="px-4 py-3">
                         <div className="space-y-2">

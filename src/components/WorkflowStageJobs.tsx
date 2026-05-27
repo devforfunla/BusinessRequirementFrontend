@@ -70,13 +70,13 @@ export function JobSummaryCard({ title, job }: { title: string; job?: AsyncJob |
   }
 
   return (
-    <div className="rounded-md border border-[#d8dee8] bg-[#fbfcfe] p-3">
+    <div className="flex h-full flex-col rounded-md border border-[#d8dee8] bg-[#fbfcfe] p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm font-semibold text-[#344054]">{title}</p>
         <StatusPill value={job.status} />
       </div>
       <p className="mt-2 font-mono text-xs text-[#667085]">{job.id}</p>
-      {job.resultPayload ? <JsonBlock className="mt-3 max-h-44" value={job.resultPayload} /> : null}
+      {job.resultPayload ? <JsonBlock className="mt-3 min-h-64 max-h-[460px] flex-1" value={job.resultPayload} /> : null}
       {job.errorMessage ? <p className="mt-2 text-sm text-[#b42318]">{job.errorMessage}</p> : null}
     </div>
   )

@@ -8,6 +8,8 @@ import {
   atomicMakerApi,
   atomicRulesApi,
   getErrorMessage,
+  getAtomicRuleCode,
+  getAtomicRuleSemanticCode,
   isJobRunning,
   jobsApi,
   semanticRulesApi,
@@ -214,10 +216,10 @@ export function AtomicStagePage() {
                   return (
                     <tr key={rule.id} className="border-b border-[#edf1f6] last:border-0">
                       <td className="px-4 py-3">
-                        <p className="font-medium text-[#172033]">{rule.atomicRuleCode}</p>
-                        <p className="text-xs text-[#667085]">v{rule.atomicVersion ?? 0} {rule.changeType || ''}</p>
+                        <p className="font-medium text-[#172033]">{getAtomicRuleCode(rule)}</p>
+                        <p className="text-xs text-[#667085]">v{rule.atomicVersion ?? 0}</p>
                       </td>
-                      <td className="px-4 py-3 text-[#475467]">{rule.semanticRuleCode || '-'}</td>
+                      <td className="px-4 py-3 text-[#475467]">{getAtomicRuleSemanticCode(rule)}</td>
                       <td className="px-4 py-3"><StatusPill value={rule.status} /></td>
                       <td className="px-4 py-3"><StatusPill value={result?.llmIsPassing || 'NOT_CHECKED'} /></td>
                       <td className="px-4 py-3">
