@@ -25,12 +25,10 @@ export function DocumentsPage() {
   const uploadMutation = useMutation({
     mutationFn: async () => {
       if (!file) throw new Error('Choose a PDF or TXT document first.')
-      const uploaded = await documentsApi.upload(file, reviewerId || 'reviewer-poc')
-      await documentsApi.transform(uploaded.documentId)
-      return uploaded
+      return documentsApi.upload(file, reviewerId || 'reviewer-poc')
     },
     onSuccess: (uploaded) => {
-      toast.success('Document uploaded and transform started')
+      toast.success('Document uploaded')
       setDocumentId(uploaded.documentId)
       setFile(null)
       void queryClient.invalidateQueries({ queryKey: ['documents'] })
@@ -86,7 +84,7 @@ export function DocumentsPage() {
           </Label>
           <Button variant="primary" onClick={() => uploadMutation.mutate()} disabled={!file || uploadMutation.isPending}>
             <Upload className="h-4 w-4" aria-hidden="true" />
-            Upload and Transform
+            Upload
           </Button>
         </div>
       </Panel>
@@ -123,7 +121,7 @@ export function DocumentsPage() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-3"><StatusPill value={document.transformStatus} /></td>
+                    <td className="px-4 py-3"><StatusPill value={getDocumentStatusLabel(document.transformStatus)} /></td>
                     <td className="px-4 py-3 text-[#475467]">{formatBytes(document.fileSize)}</td>
                     <td className="px-4 py-3 text-[#475467]">{document.totalPages || '-'}</td>
                     <td className="px-4 py-3 text-[#475467]">{formatDate(document.updatedAt || document.createdAt)}</td>
@@ -168,4 +166,8 @@ export function DocumentsPage() {
       </Panel>
     </div>
   )
+}
+
+function getDocumentStatusLabel(status?: string | null) {
+  return status === 'PENDING' ? 'Upload successful' : status
 }

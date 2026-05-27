@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom'
-import { FileText, GitBranch, Layers3, Settings, ShieldCheck } from 'lucide-react'
+import { Activity, FileText, GitBranch, Layers3, ScrollText, Settings, ShieldCheck } from 'lucide-react'
 import { useAppStore } from '../store'
 import { cn } from '../utils'
 import { TextInput } from './ui'
@@ -8,6 +8,8 @@ const navItems = [
   { to: '/documents', label: 'Documents', icon: FileText },
   { to: '/workflows', label: 'Workflows', icon: GitBranch },
   { to: '/skills', label: 'Skills', icon: Settings },
+  { to: '/application-logs', label: 'Application Logs', icon: ScrollText },
+  { to: '/trace-logs', label: 'Trace Logs', icon: Activity },
 ]
 
 export function AppShell() {

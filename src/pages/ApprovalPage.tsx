@@ -49,9 +49,9 @@ export function ApprovalPage() {
           <>
             <Link
               className="inline-flex h-9 items-center justify-center rounded-md border border-[#c8d0dc] bg-white px-3 text-sm font-medium text-[#172033] hover:bg-[#eef2f7]"
-              to={`/workflows/${encodeURIComponent(workflowId)}`}
+              to={`/workflows/${encodeURIComponent(workflowId)}/atomic`}
             >
-              Back to Workflow
+              Back to Atomic Stage
             </Link>
             <Button onClick={() => void queryClient.invalidateQueries()}>
               <RefreshCw className="h-4 w-4" aria-hidden="true" />

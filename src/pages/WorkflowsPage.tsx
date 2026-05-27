@@ -44,7 +44,7 @@ export function WorkflowsPage() {
       void queryClient.invalidateQueries({ queryKey: ['workflows'] })
       if (job.workflowId) {
         setWorkflowId(job.workflowId)
-        navigate(`/workflows/${encodeURIComponent(job.workflowId)}`)
+        navigate(`/workflows/${encodeURIComponent(job.workflowId)}/semantic`)
       }
     }
     if (job.status === 'FAILED') {
@@ -169,7 +169,7 @@ export function WorkflowsPage() {
                     <td className="px-4 py-3">
                       <Link
                         className="inline-flex h-8 items-center justify-center rounded-md border border-[#1f6feb] bg-[#1f6feb] px-3 text-xs font-medium text-white hover:bg-[#1a5fca]"
-                        to={`/workflows/${encodeURIComponent(workflow.id)}`}
+                        to={`/workflows/${encodeURIComponent(workflow.id)}/semantic`}
                         onClick={() => {
                           setWorkflowId(workflow.id)
                           setDocumentId(workflow.documentId)

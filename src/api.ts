@@ -181,6 +181,80 @@ export type ChangeHistoryItem = {
   affectedRules?: Array<JsonRecord>
 }
 
+export type ApplicationLogResponse = {
+  fileName: string
+  fileSize: number
+  lastModified?: string | null
+  requestedTail: number
+  returnedLines: number
+  lines: string[]
+}
+
+export type WorkflowTraceRecord = {
+  id: string
+  documentId: string
+  triggeredBy?: string | null
+  atomicMakerSkillId?: string | null
+  checkerSkillId?: string | null
+  status: string
+  createdAt?: string | null
+  updatedAt?: string | null
+}
+
+export type LlmAgentSession = {
+  id: string
+  jobId: string
+  workflowId?: string | null
+  jobType: string
+  model?: string | null
+  skillName?: string | null
+  skillId?: string | null
+  skillVersion?: string | null
+  finalStatus: string
+  validationPassed?: boolean | null
+  totalRounds?: number | null
+  totalDurationMs?: number | null
+  finalValidationMessage?: string | null
+  totalPromptTokens?: number | null
+  totalCompletionTokens?: number | null
+  totalTokens?: number | null
+  createdAt?: string | null
+  completedAt?: string | null
+}
+
+export type LlmCallAudit = {
+  id: string
+  agentSessionId?: string | null
+  llmCallId: string
+  workflowId?: string | null
+  jobId?: string | null
+  jobType: string
+  iterationRound?: number | null
+  model: string
+  status: string
+  retryCount?: number | null
+  durationMs?: number | null
+  prompt: string
+  response?: string | null
+  errorMessage?: string | null
+  promptTokens?: number | null
+  completionTokens?: number | null
+  totalTokens?: number | null
+  createdAt?: string | null
+}
+
+export type AgentTrace = {
+  session: LlmAgentSession
+  llmCalls: LlmCallAudit[]
+}
+
+export type JobTraceResponse = {
+  job: AsyncJob
+  workflow?: WorkflowTraceRecord | null
+  agentSessions: AgentTrace[]
+  unscopedLlmCalls: LlmCallAudit[]
+}
+
 const http = axios.create({
   baseURL: '/api/v1',
   headers: {
@@ -219,7 +293,13 @@ export const documentsApi = {
 }
 
 export const jobsApi = {
-  get: (jobId: string) => fromResponse<AsyncJob>(http.get(atomicPath(`/jobs/${encodeURIComponent(jobId)}`))),
+  get: (jobId: string) => fromResponse<AsyncJob>(http.get(`/business-analysis/jobs/${encodeURIComponent(jobId)}`)),
+  listByWorkflow: (workflowId: string, jobType?: string) =>
+    fromResponse<AsyncJob[]>(
+      http.get('/business-analysis/jobs', {
+        params: { workflowId, jobType },
+      }),
+    ),
   affectedRules: (jobId: string) =>
     fromResponse<JsonRecord>(http.get(atomicPath(`/jobs/${encodeURIComponent(jobId)}/affected-rules`))),
   changes: (jobId: string) => fromResponse<JsonRecord>(http.get(atomicPath(`/jobs/${encodeURIComponent(jobId)}/changes`))),
@@ -341,6 +421,16 @@ export const skillsApi = {
   delete: (skillId: string) => fromResponse<{ message: string }>(http.delete(`/skills/${encodeURIComponent(skillId)}`)),
   resources: (skillId: string) =>
     fromResponse<SkillResource[]>(http.get(`/skills/${encodeURIComponent(skillId)}/resources`)),
+}
+
+export const applicationLogsApi = {
+  get: (params: { tail?: number; level?: string; q?: string }) =>
+    fromResponse<ApplicationLogResponse>(http.get('/application-logs', { params })),
+}
+
+export const traceLogsApi = {
+  getByJobId: (jobId: string) =>
+    fromResponse<JobTraceResponse>(http.get(`/trace/jobs/${encodeURIComponent(jobId)}`)),
 }
 
 export function isJobRunning(status?: string | null) {
