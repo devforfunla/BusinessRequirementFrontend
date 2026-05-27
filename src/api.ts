@@ -86,6 +86,8 @@ export type SemanticRule = {
   updatedAt?: string | null
 }
 
+export type SemanticRuleRewriteMode = 'CHECKER_FEEDBACK' | 'HUMAN_FEEDBACK'
+
 export type AtomicRule = {
   id: string
   atomicRuleCode?: string | null
@@ -281,27 +283,28 @@ const optionalFromResponse = <T>(request: Promise<{ status: number; data: T }>) 
 
 const atomicPath = (path: string) => `/atomic-analysis${path}`
 const semanticPath = (path: string) => `/semantic-analysis${path}`
+const businessPath = (path: string) => `/business-analysis${path}`
 
 export const documentsApi = {
-  list: () => fromResponse<DocumentRecord[]>(http.get(atomicPath('/documents'))),
+  list: () => fromResponse<DocumentRecord[]>(http.get(businessPath('/documents'))),
   listByReviewer: (reviewerId: string) =>
-    fromResponse<DocumentRecord[]>(http.get(atomicPath(`/documents/reviewer/${encodeURIComponent(reviewerId)}`))),
+    fromResponse<DocumentRecord[]>(http.get(businessPath(`/documents/reviewer/${encodeURIComponent(reviewerId)}`))),
   get: (documentId: string) =>
-    fromResponse<DocumentRecord>(http.get(atomicPath(`/documents/${encodeURIComponent(documentId)}`))),
+    fromResponse<DocumentRecord>(http.get(businessPath(`/documents/${encodeURIComponent(documentId)}`))),
   upload: (file: File, reviewerId: string) => {
     const body = new FormData()
     body.append('file', file)
     body.append('reviewerId', reviewerId)
     return fromResponse<DocumentUploadResponse>(
-      http.post(atomicPath('/documents/upload'), body, {
+      http.post(businessPath('/documents/upload'), body, {
         headers: { 'Content-Type': 'multipart/form-data' },
       }),
     )
   },
   transform: (documentId: string) =>
-    fromResponse<DocumentRecord>(http.post(atomicPath(`/documents/${encodeURIComponent(documentId)}/transform`))),
+    fromResponse<DocumentRecord>(http.post(businessPath(`/documents/${encodeURIComponent(documentId)}/transform`))),
   delete: (documentId: string) =>
-    fromResponse<{ message: string }>(http.delete(atomicPath(`/documents/${encodeURIComponent(documentId)}`))),
+    fromResponse<{ message: string }>(http.delete(businessPath(`/documents/${encodeURIComponent(documentId)}`))),
 }
 
 export const jobsApi = {
@@ -360,10 +363,22 @@ export const semanticRulesApi = {
     fromResponse<JsonRecord>(
       http.post(semanticPath(`/workflows/${encodeURIComponent(workflowId)}/semantic-rules/approve-all`), { approverId }),
     ),
+  rewrite: (
+    semanticRuleId: string,
+    payload: { workflowId: string; rewriteMode: SemanticRuleRewriteMode; humanFeedback?: string },
+  ) => fromResponse<JobResponse>(http.post(semanticPath(`/semantic-rules/${encodeURIComponent(semanticRuleId)}/rewrite`), payload)),
+  editByHuman: (semanticRuleId: string, editedContent: JsonRecord, editorId: string) =>
+    fromResponse<SemanticRule>(
+      http.post(semanticPath(`/semantic-rules/${encodeURIComponent(semanticRuleId)}/edit-by-human`), {
+        editedContent,
+        editorId,
+      }),
+    ),
 }
 
 export const semanticCheckerApi = {
   run: (workflowId: string) => fromResponse<JobResponse>(http.post(semanticPath(`/checker/workflow/${encodeURIComponent(workflowId)}`))),
+  runRule: (ruleId: string) => fromResponse<JobResponse>(http.post(semanticPath(`/checker/rules/${encodeURIComponent(ruleId)}`))),
   latestRun: (workflowId: string) =>
     optionalFromResponse<CheckerRun>(http.get(semanticPath(`/checker/workflow/${encodeURIComponent(workflowId)}/latest-run`))),
   latestResults: (workflowId: string) =>

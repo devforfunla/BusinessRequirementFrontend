@@ -1,59 +1,76 @@
 import { Link } from 'react-router-dom'
-import { CheckCircle2, ChevronDown, ChevronRight, ClipboardCheck, GitBranch, ListChecks } from 'lucide-react'
+import { Check } from 'lucide-react'
 import { cn } from '../utils'
 
 export type WorkflowStage = 'semantic' | 'atomic' | 'test-cases'
 
 const stages = [
-  { id: 'semantic', label: 'Semantic Rule', icon: GitBranch },
-  { id: 'atomic', label: 'Atomic Rule', icon: ListChecks },
-  { id: 'test-cases', label: 'Test Cases', icon: ClipboardCheck },
-] satisfies Array<{ id: WorkflowStage; label: string; icon: typeof GitBranch }>
+  { id: 'semantic', label: 'Semantic Rule' },
+  { id: 'atomic', label: 'Atomic Rule' },
+  { id: 'test-cases', label: 'Test Cases' },
+] satisfies Array<{ id: WorkflowStage; label: string }>
 
 export function WorkflowStagePipeline({ workflowId, activeStage }: { workflowId: string; activeStage: WorkflowStage }) {
+  const activeIndex = Math.max(
+    0,
+    stages.findIndex((stage) => stage.id === activeStage),
+  )
+  const progressRatio = activeIndex / Math.max(1, stages.length - 1)
+
   return (
-    <nav className="rounded-lg border border-[#d8dee8] bg-white px-4 py-4 shadow-sm" aria-label="Workflow stages">
-      <ol className="flex flex-col gap-2 md:flex-row md:items-stretch">
+    <nav className="overflow-x-auto rounded-lg border border-[#d8dee8] bg-white px-5 py-5 shadow-sm" aria-label="Workflow stages">
+      <div className="relative mx-auto min-w-[520px] max-w-4xl px-2 pb-1">
+        <div
+          className="absolute left-[16.6667%] right-[16.6667%] top-[3.875rem] h-2 -translate-y-1/2 rounded-full bg-[#edf2f7]"
+          aria-hidden="true"
+        />
+        <div
+          className="absolute left-[16.6667%] top-[3.875rem] h-2 -translate-y-1/2 rounded-full bg-[#0b65a8] transition-all duration-300"
+          style={{ width: `calc(66.6666% * ${progressRatio})` }}
+          aria-hidden="true"
+        />
+        <ol className="relative z-10 grid grid-cols-3">
         {stages.map((stage, index) => {
           const isActive = stage.id === activeStage
+          const isComplete = index < activeIndex
+          const isReached = index <= activeIndex
+
           return (
-            <li key={stage.id} className="contents">
+            <li key={stage.id} className="min-w-0">
               <Link
                 to={`/workflows/${encodeURIComponent(workflowId)}/${stage.id}`}
+                aria-current={isActive ? 'step' : undefined}
                 className={cn(
-                  'group flex min-h-16 min-w-0 flex-1 items-center gap-3 rounded-md border px-3 py-2 transition',
-                  isActive
-                    ? 'border-[#1f6feb] bg-[#e8f1ff] text-[#175cd3] shadow-sm'
-                    : 'border-[#e3e8f0] bg-[#f8fafc] text-[#344054] hover:border-[#b9c7da] hover:bg-[#f1f5f9]',
+                  'group flex min-w-0 flex-col items-center text-center outline-none transition',
+                  'focus-visible:rounded-md focus-visible:ring-2 focus-visible:ring-[#0b65a8] focus-visible:ring-offset-4',
                 )}
               >
                 <span
                   className={cn(
-                    'flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-xs font-semibold',
-                    isActive ? 'border-[#1f6feb] bg-white' : 'border-[#c8d0dc] bg-white text-[#667085]',
+                    'h-5 max-w-full truncate text-sm font-semibold uppercase leading-5 transition-colors',
+                    isReached ? 'text-[#0b65a8]' : 'text-[#475467] group-hover:text-[#0b65a8]',
                   )}
                 >
-                  {index + 1}
+                  {stage.label}
                 </span>
-                <span className="min-w-0 flex-1">
-                  <span className="flex items-center gap-2 text-sm font-semibold">
-                    <stage.icon className="h-4 w-4" aria-hidden="true" />
-                    <span className="truncate">{stage.label}</span>
-                  </span>
-                  <span className="mt-0.5 block text-xs text-[#667085]">{isActive ? 'Current stage' : 'Open stage'}</span>
+                <span
+                  className={cn(
+                    'mt-5 flex h-11 w-11 items-center justify-center rounded-full border-2 transition-colors',
+                    isComplete && 'border-[#0b65a8] bg-[#0b65a8] text-white',
+                    isActive && 'border-[#0b65a8] bg-[#0b65a8] text-white shadow-[0_0_0_4px_rgba(11,101,168,0.12)]',
+                    !isReached && 'border-[#edf2f7] bg-[#edf2f7] text-transparent group-hover:border-[#c9d8e5]',
+                  )}
+                  aria-hidden="true"
+                >
+                  {isComplete ? <Check className="h-6 w-6" strokeWidth={3} /> : null}
+                  {isActive ? <span className="h-2.5 w-2.5 rounded-full bg-white" /> : null}
                 </span>
-                {isActive ? <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" /> : null}
               </Link>
-              {index < stages.length - 1 ? (
-                <span className="flex items-center justify-center text-[#98a2b3]" aria-hidden="true">
-                  <ChevronDown className="h-5 w-5 md:hidden" />
-                  <ChevronRight className="hidden h-5 w-5 md:block" />
-                </span>
-              ) : null}
             </li>
           )
         })}
       </ol>
+      </div>
     </nav>
   )
 }

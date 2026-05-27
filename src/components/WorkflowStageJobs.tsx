@@ -1,7 +1,7 @@
 import { Activity, AlertCircle, Clock3 } from 'lucide-react'
 import type { AsyncJob } from '../api'
 import { formatDate } from '../utils'
-import { EmptyState, JsonBlock, Panel, PanelHeader, StatusPill } from './ui'
+import { EmptyState, JsonBlock, JsonDetails, Panel, PanelHeader, StatusPill } from './ui'
 
 export function WorkflowStageJobs({
   title,
@@ -76,7 +76,7 @@ export function JobSummaryCard({ title, job }: { title: string; job?: AsyncJob |
         <StatusPill value={job.status} />
       </div>
       <p className="mt-2 font-mono text-xs text-[#667085]">{job.id}</p>
-      {job.resultPayload ? <JsonBlock className="mt-3 min-h-64 max-h-[460px] flex-1" value={job.resultPayload} /> : null}
+      {job.resultPayload ? <JsonDetails title="Result" value={job.resultPayload} /> : null}
       {job.errorMessage ? <p className="mt-2 text-sm text-[#b42318]">{job.errorMessage}</p> : null}
     </div>
   )

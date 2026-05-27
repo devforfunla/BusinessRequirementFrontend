@@ -155,3 +155,17 @@ export function JsonBlock({ value, className }: { value: unknown; className?: st
     </pre>
   )
 }
+
+export function JsonDetails({ title, value }: { title: string; value?: string | null }) {
+  if (!value) return <span className="text-[#98a2b3]">-</span>
+  return (
+    <details className="mt-2 rounded-md border border-[#d8dee8] bg-[#f8fafc]">
+      <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-[#175cd3] hover:bg-[#edf2f7]">
+        View {title}
+      </summary>
+      <div className="border-t border-[#e3e8f0] p-2">
+        <JsonBlock className="max-h-72 min-w-[360px]" value={value} />
+      </div>
+    </details>
+  )
+}
