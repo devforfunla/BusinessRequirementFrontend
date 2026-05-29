@@ -108,6 +108,20 @@ export type AtomicRule = {
   updatedAt?: string | null
 }
 
+export type AtomicRuleOperationResponse = {
+  id: string
+  atomicRuleCode?: string | null
+  workflowId: string
+  atomicVersion?: number | null
+  changeType?: string | null
+  status: string
+  semanticRuleCode?: string | null
+  content?: string | null
+  humanInterventionId?: string | null
+  createdAt?: string | null
+  updatedAt?: string | null
+}
+
 export type CheckerRun = {
   id: string
   checkerJobId: string
@@ -409,11 +423,11 @@ export const atomicRulesApi = {
   allVersionsByWorkflow: (workflowId: string) =>
     fromResponse<AtomicRule[]>(http.get(atomicPath(`/workflows/${encodeURIComponent(workflowId)}/atomic-rules/all-versions`))),
   approve: (atomicRuleId: string, approverId: string) =>
-    fromResponse<AtomicRule>(http.post(atomicPath(`/atomic-rules/${encodeURIComponent(atomicRuleId)}/approve`), { approverId })),
+    fromResponse<AtomicRuleOperationResponse>(http.post(atomicPath(`/atomic-rules/${encodeURIComponent(atomicRuleId)}/approve`), { approverId })),
   reopen: (atomicRuleId: string, userId: string) =>
-    fromResponse<AtomicRule>(http.post(atomicPath(`/atomic-rules/${encodeURIComponent(atomicRuleId)}/reopen`), { userId })),
+    fromResponse<AtomicRuleOperationResponse>(http.post(atomicPath(`/atomic-rules/${encodeURIComponent(atomicRuleId)}/reopen`), { userId })),
   editByHuman: (atomicRuleId: string, editedContent: JsonRecord, editorId: string) =>
-    fromResponse<AtomicRule>(
+    fromResponse<AtomicRuleOperationResponse>(
       http.post(atomicPath(`/atomic-rules/${encodeURIComponent(atomicRuleId)}/edit-by-human`), {
         editedContent,
         editorId,
