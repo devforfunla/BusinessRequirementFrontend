@@ -363,6 +363,8 @@ export const semanticRulesApi = {
     fromResponse<JsonRecord>(
       http.post(semanticPath(`/workflows/${encodeURIComponent(workflowId)}/semantic-rules/approve-all`), { approverId }),
     ),
+  approvalStatus: (workflowId: string) =>
+    fromResponse<JsonRecord>(http.get(semanticPath(`/workflows/${encodeURIComponent(workflowId)}/semantic-rules/approval-status`))),
   rewrite: (
     semanticRuleId: string,
     payload: { workflowId: string; rewriteMode: SemanticRuleRewriteMode; humanFeedback?: string },
@@ -378,7 +380,6 @@ export const semanticRulesApi = {
 
 export const semanticCheckerApi = {
   run: (workflowId: string) => fromResponse<JobResponse>(http.post(semanticPath(`/checker/workflow/${encodeURIComponent(workflowId)}`))),
-  runRule: (ruleId: string) => fromResponse<JobResponse>(http.post(semanticPath(`/checker/rules/${encodeURIComponent(ruleId)}`))),
   latestRun: (workflowId: string) =>
     optionalFromResponse<CheckerRun>(http.get(semanticPath(`/checker/workflow/${encodeURIComponent(workflowId)}/latest-run`))),
   latestResults: (workflowId: string) =>

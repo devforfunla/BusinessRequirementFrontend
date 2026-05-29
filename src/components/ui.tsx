@@ -1,5 +1,6 @@
 import type { ButtonHTMLAttributes, HTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react'
-import { AlertCircle, Inbox } from 'lucide-react'
+import { useState } from 'react'
+import { AlertCircle, Inbox, X } from 'lucide-react'
 import { parseJsonText } from '../api'
 import { cn } from '../utils'
 
@@ -163,9 +164,88 @@ export function JsonDetails({ title, value }: { title: string; value?: string | 
       <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-[#175cd3] hover:bg-[#edf2f7]">
         View {title}
       </summary>
-      <div className="border-t border-[#e3e8f0] p-2">
-        <JsonBlock className="max-h-72 min-w-[360px]" value={value} />
+      <div className="border-t border-[#e3e8f0] overflow-x-auto p-2">
+        <JsonBlock className="max-h-80 max-w-sm" value={value} />
       </div>
     </details>
   )
+}
+
+export function JsonViewButton({ title, value, label }: { title: string; value?: string | null; label?: string }) {
+  const [open, setOpen] = useState(false)
+  if (!value) return <span className="text-[#98a2b3]">-</span>
+  return (
+    <>
+      <Button size="sm" onClick={() => setOpen(true)}>
+        {label || 'View'}
+      </Button>
+      {open ? (
+        <JsonDrawer title={title} value={value} onClose={() => setOpen(false)} />
+      ) : null}
+    </>
+  )
+}
+
+export function JsonDrawer({
+  title,
+  value,
+  onClose,
+}: {
+  title: string
+  value?: string | null
+  onClose: () => void
+}) {
+  if (!value) return null
+  const parsed = typeof value === 'string' ? parseJsonText(value) : value
+  const display = typeof parsed === 'string' ? parsed : JSON.stringify(parsed, null, 2)
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end">
+      <div className="absolute inset-0 bg-[#101828]/35 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative flex h-full w-full max-w-2xl flex-col border-l border-[#c8d0dc] bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-[#e3e8f0] bg-[#f8fafc] px-5 py-3">
+          <div className="flex items-center gap-2.5">
+            <span className="rounded bg-[#1f6feb] px-2 py-0.5 text-xs font-medium text-white">JSON</span>
+            <h2 className="text-sm font-semibold text-[#172033]">{title}</h2>
+          </div>
+          <button onClick={onClose} className="rounded-md p-1.5 text-[#667085] hover:bg-[#edf2f7] hover:text-[#172033] transition-colors">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="flex-1 overflow-auto bg-[#fafbfc]">
+          <pre className="flex min-h-full text-xs leading-6" style={{ fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace' }}>
+            <div className="sticky left-0 select-none border-r border-[#d8dee8] bg-[#f0f2f5] px-2 py-5 text-right text-[#8b949e] select-none">
+              {display.split('\n').map((_, i) => (
+                <div key={i}>{i + 1}</div>
+              ))}
+            </div>
+            <div className="flex-1 py-5 pl-4 pr-2 text-[#24292f] overflow-x-auto whitespace-pre"
+              dangerouslySetInnerHTML={{ __html: colorizeJson(display || 'null') }}
+            />
+          </pre>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function colorizeJson(json: string): string {
+  return json
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    // field names: "key":  →  brown/maroon
+    .replace(/(^[ \t]*)"([^"]+)":/gm, (_, space, key) => `${space}<span style="color:#a31515">"${key}"</span>:`)
+    // string values: ": "value"  →  dark blue
+    .replace(/: "([^"]*)"/g, (_, val) => ': <span style="color:#0451a5">"' + val + '"</span>')
+    // numbers: : 123  →  green
+    .replace(/: (-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g, ': <span style="color:#098658">$1</span>')
+    // booleans: true/false  →  blue
+    .replace(/: (true|false)/g, ': <span style="color:#0000ff">$1</span>')
+    // null: null  →  blue (same as bool)
+    .replace(/: (null)/g, ': <span style="color:#0000ff">$1</span>')
+    // key names inside nested objects
+    .replace(/([{,]\s*)"([^"]+)":/g, (_, pre, key) => `${pre}<span style="color:#a31515">"${key}"</span>:`)
+    // string values in arrays
+    .replace(/(,|\[)\s*"([^"]*)"/g, (_, pre, val) => `${pre}<span style="color:#0451a5">"${val}"</span>`)
+    // numbers in arrays
+    .replace(/(,|\[)\s*(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g, (_, pre, num) => `${pre}<span style="color:#098658">${num}</span>`)
 }

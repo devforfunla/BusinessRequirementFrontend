@@ -18,14 +18,14 @@ export function WorkflowStagePipeline({ workflowId, activeStage }: { workflowId:
   const progressRatio = activeIndex / Math.max(1, stages.length - 1)
 
   return (
-    <nav className="overflow-x-auto rounded-lg border border-[#d8dee8] bg-white px-5 py-5 shadow-sm" aria-label="Workflow stages">
-      <div className="relative mx-auto min-w-[520px] max-w-4xl px-2 pb-1">
+    <nav className="overflow-x-auto rounded-lg border border-[#d8dee8] bg-white px-4 py-3 shadow-sm" aria-label="Workflow stages">
+      <div className="relative mx-auto min-w-[360px] max-w-xl px-2">
         <div
-          className="absolute left-[16.6667%] right-[16.6667%] top-[3.875rem] h-2 -translate-y-1/2 rounded-full bg-[#edf2f7]"
+          className="absolute left-[16.6667%] right-[16.6667%] top-[1.375rem] h-1.5 -translate-y-1/2 rounded-full bg-[#edf2f7]"
           aria-hidden="true"
         />
         <div
-          className="absolute left-[16.6667%] top-[3.875rem] h-2 -translate-y-1/2 rounded-full bg-[#0b65a8] transition-all duration-300"
+          className="absolute left-[16.6667%] top-[1.375rem] h-1.5 -translate-y-1/2 rounded-full bg-[#0b65a8] transition-all duration-300"
           style={{ width: `calc(66.6666% * ${progressRatio})` }}
           aria-hidden="true"
         />
@@ -47,7 +47,7 @@ export function WorkflowStagePipeline({ workflowId, activeStage }: { workflowId:
               >
                 <span
                   className={cn(
-                    'h-5 max-w-full truncate text-sm font-semibold uppercase leading-5 transition-colors',
+                    'h-4 max-w-full truncate text-xs font-semibold uppercase leading-4 transition-colors',
                     isReached ? 'text-[#0b65a8]' : 'text-[#475467] group-hover:text-[#0b65a8]',
                   )}
                 >
@@ -55,15 +55,15 @@ export function WorkflowStagePipeline({ workflowId, activeStage }: { workflowId:
                 </span>
                 <span
                   className={cn(
-                    'mt-5 flex h-11 w-11 items-center justify-center rounded-full border-2 transition-colors',
+                    'mt-1.5 flex h-8 w-8 items-center justify-center rounded-full border-2 transition-colors',
                     isComplete && 'border-[#0b65a8] bg-[#0b65a8] text-white',
-                    isActive && 'border-[#0b65a8] bg-[#0b65a8] text-white shadow-[0_0_0_4px_rgba(11,101,168,0.12)]',
+                    isActive && 'border-[#0b65a8] bg-[#0b65a8] text-white shadow-[0_0_0_3px_rgba(11,101,168,0.12)]',
                     !isReached && 'border-[#edf2f7] bg-[#edf2f7] text-transparent group-hover:border-[#c9d8e5]',
                   )}
                   aria-hidden="true"
                 >
-                  {isComplete ? <Check className="h-6 w-6" strokeWidth={3} /> : null}
-                  {isActive ? <span className="h-2.5 w-2.5 rounded-full bg-white" /> : null}
+                  {isComplete ? <Check className="h-4 w-4" strokeWidth={3} /> : null}
+                  {isActive ? <span className="h-2 w-2 rounded-full bg-white" /> : null}
                 </span>
               </Link>
             </li>

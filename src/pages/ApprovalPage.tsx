@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 import { atomicCheckerApi, atomicRulesApi, getAtomicRuleCode, getAtomicRuleSemanticCode, getErrorMessage } from '../api'
 import { useAppStore } from '../store'
 import { formatDate } from '../utils'
-import { Button, EmptyState, ErrorNotice, JsonBlock, PageTitle, Panel, PanelHeader, StatusPill } from '../components/ui'
+import { Button, EmptyState, ErrorNotice, JsonViewButton, PageTitle, Panel, PanelHeader, StatusPill } from '../components/ui'
 
 export function ApprovalPage() {
   const { workflowId = '' } = useParams()
@@ -94,7 +94,7 @@ export function ApprovalPage() {
                       <td className="px-4 py-3">
                         <div className="space-y-2">
                           <StatusPill value={checker?.llmIsPassing || 'NOT_CHECKED'} />
-                          {checker?.llmFindings ? <JsonBlock className="max-h-32 w-80" value={checker.llmFindings} /> : null}
+                          {checker?.llmFindings ? <JsonViewButton title="Checker Findings" value={checker.llmFindings} label="View Findings" /> : null}
                         </div>
                       </td>
                       <td className="px-4 py-3 text-[#475467]">{formatDate(rule.updatedAt || rule.createdAt)}</td>

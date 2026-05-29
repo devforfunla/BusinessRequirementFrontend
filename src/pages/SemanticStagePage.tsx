@@ -1,7 +1,7 @@
 import { type ReactNode, useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CheckCircle2, Edit3, History, MessageSquareText, RefreshCw, RotateCcw, ShieldCheck } from 'lucide-react'
+import { CheckCircle2, Edit3, History, MessageSquareText, RefreshCw, RotateCcw, ShieldCheck, ArrowRight } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   getErrorMessage,
@@ -22,7 +22,7 @@ import {
 } from '../api'
 import { JobSummaryCard, WorkflowStageJobs } from '../components/WorkflowStageJobs'
 import { WorkflowStagePipeline } from '../components/WorkflowStagePipeline'
-import { Button, EmptyState, ErrorNotice, JsonBlock, JsonDetails, Label, PageTitle, Panel, PanelHeader, StatusPill, TextArea } from '../components/ui'
+import { Button, EmptyState, ErrorNotice, JsonViewButton, Label, PageTitle, Panel, PanelHeader, StatusPill, TextArea } from '../components/ui'
 import { usePolledJob } from '../hooks'
 import { useAppStore } from '../store'
 import { formatDate } from '../utils'
@@ -36,6 +36,7 @@ const approvedButtonClass =
 
 export function SemanticStagePage() {
   const { workflowId = '' } = useParams()
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const reviewerId = useAppStore((state) => state.reviewerId)
   const setDocumentId = useAppStore((state) => state.setDocumentId)
@@ -165,6 +166,19 @@ export function SemanticStagePage() {
     },
   })
 
+  const proceedMutation = useMutation({
+    mutationFn: () => semanticRulesApi.approvalStatus(workflowId),
+    onSuccess: (data) => {
+      const canProceed = (data as Record<string, unknown>).canProceed
+      if (canProceed) {
+        navigate(`/workflows/${encodeURIComponent(workflowId)}/atomic`)
+      } else {
+        toast.error('Cannot proceed to next stage unless all semantic rules are approved.')
+      }
+    },
+    onError: () => toast.error('Failed to check approval status.'),
+  })
+
   const rewriteSemanticMutation = useMutation({
     mutationFn: ({
       semanticRuleId,
@@ -277,14 +291,23 @@ export function SemanticStagePage() {
           title="Semantic Rules"
           description={`${approvedSemanticCount}/${semanticRules.length} approved`}
           actions={
-            <Button
-              onClick={() => approveAllMutation.mutate()}
-              disabled={approveAllMutation.isPending || semanticRules.length === 0 || allSemanticRulesApproved}
-              className={allSemanticRulesApproved ? approvedButtonClass : undefined}
-            >
-              <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-              {allSemanticRulesApproved ? 'Approved' : 'Approve All'}
-            </Button>
+            <>
+              <Button
+                onClick={() => approveAllMutation.mutate()}
+                disabled={approveAllMutation.isPending || semanticRules.length === 0 || allSemanticRulesApproved}
+                className={allSemanticRulesApproved ? approvedButtonClass : undefined}
+              >
+                <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                {allSemanticRulesApproved ? 'Approved' : 'Approve All'}
+              </Button>
+              <Button
+                onClick={() => proceedMutation.mutate()}
+                disabled={proceedMutation.isPending || semanticRules.length === 0}
+              >
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                Proceed to Atomic
+              </Button>
+            </>
           }
         />
         {semanticRules.length === 0 && !semanticRulesQuery.isLoading ? (
@@ -322,14 +345,20 @@ export function SemanticStagePage() {
                       <td className="px-4 py-3">
                         <StatusPill value={result?.llmIsPassing || 'NOT_CHECKED'} />
                       </td>
-                      <td className="max-w-xl px-4 py-3 text-[#475467]">
-                        <p className="line-clamp-2">{getSemanticRuleSummary(rule) || getSemanticRuleBusinessIntent(rule) || '-'}</p>
+                      <td className="max-w-xs px-4 py-3 text-[#475467]">
+                        <TextDetails text={getSemanticRuleSummary(rule) || getSemanticRuleBusinessIntent(rule) || '-'} />
                       </td>
-                      <td className="w-[170px] px-4 py-3">
-                        <JsonDetails title="Semantic JSON" value={rule.llmOutputJson} />
+                      <td className="w-[100px] px-4 py-3">
+                        <JsonViewButton
+                          title={`${getSemanticRuleCode(rule)} JSON`}
+                          value={rule.llmOutputJson}
+                        />
                       </td>
-                      <td className="w-[170px] px-4 py-3">
-                        <JsonDetails title="Checker JSON" value={result?.llmReviewEntry || result?.llmFindings} />
+                      <td className="w-[100px] px-4 py-3">
+                        <JsonViewButton
+                          title={`${getSemanticRuleCode(rule)} Checker`}
+                          value={result?.llmReviewEntry || result?.llmFindings}
+                        />
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex flex-wrap gap-2">
@@ -519,6 +548,19 @@ function SemanticDialog({
   )
 }
 
+function TextDetails({ text }: { text: string }) {
+  const preview = text.length > 60 ? text.slice(0, 60) + '...' : text
+  if (text.length <= 60) return <span>{text}</span>
+  return (
+    <details className="rounded-md border border-[#d8dee8] bg-[#f8fafc]">
+      <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-[#175cd3] hover:bg-[#edf2f7]">
+        {preview}
+      </summary>
+      <div className="border-t border-[#e3e8f0] p-3 text-xs">{text}</div>
+    </details>
+  )
+}
+
 function CheckerSummary({ title, run }: { title: string; run?: CheckerRun | null }) {
   if (!run) {
     return (
@@ -576,7 +618,7 @@ function CheckerSummary({ title, run }: { title: string; run?: CheckerRun | null
       ) : null}
       
       <p className="mt-3 text-xs text-[#667085]">{run.model || 'model unknown'} - {formatDate(run.checkedAt)}</p>
-      {run.calcSummaryJson ? <JsonDetails title="Checker JSON" value={run.calcSummaryJson} /> : null}
+      {run.calcSummaryJson ? <JsonViewButton title="Checker JSON" value={run.calcSummaryJson} label="View JSON" /> : null}
     </div>
   )
 }

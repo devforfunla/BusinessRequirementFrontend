@@ -19,7 +19,7 @@ import {
 } from '../api'
 import { JobSummaryCard, WorkflowStageJobs } from '../components/WorkflowStageJobs'
 import { WorkflowStagePipeline } from '../components/WorkflowStagePipeline'
-import { Button, EmptyState, ErrorNotice, JsonBlock, PageTitle, Panel, PanelHeader, StatusPill } from '../components/ui'
+import { Button, EmptyState, ErrorNotice, JsonViewButton, PageTitle, Panel, PanelHeader, StatusPill } from '../components/ui'
 import { usePolledJob } from '../hooks'
 import { useAppStore } from '../store'
 import { formatDate } from '../utils'
@@ -263,7 +263,7 @@ function CheckerSummary({ title, run }: { title: string; run?: CheckerRun | null
       </div>
       <p className="mt-2 text-sm text-[#475467]">{run.llmHighLevelFeedback || 'No feedback text.'}</p>
       <p className="mt-3 text-xs text-[#667085]">{run.model || 'model unknown'} - {formatDate(run.checkedAt)}</p>
-      {run.calcSummaryJson ? <JsonBlock className="mt-3 max-h-44" value={run.calcSummaryJson} /> : null}
+      {run.calcSummaryJson ? <JsonViewButton title="Checker JSON" value={run.calcSummaryJson} label="View JSON" /> : null}
     </div>
   )
 }

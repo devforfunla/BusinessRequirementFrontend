@@ -21,7 +21,7 @@ import {
 import { usePolledJob } from '../hooks'
 import { useAppStore } from '../store'
 import { formatDate } from '../utils'
-import { Button, EmptyState, ErrorNotice, JsonBlock, Label, PageTitle, Panel, PanelHeader, Select, StatusPill, TextArea } from '../components/ui'
+import { Button, EmptyState, ErrorNotice, JsonViewButton, Label, PageTitle, Panel, PanelHeader, Select, StatusPill, TextArea } from '../components/ui'
 
 export function SemanticGroupPage() {
   const { workflowId = '', semanticRuleId = '' } = useParams()
@@ -166,7 +166,7 @@ export function SemanticGroupPage() {
                   <StatusPill value={semanticResultQuery.data?.llmIsPassing || 'NOT_CHECKED'} />
                   <span className="text-xs text-[#667085]">{formatDate(semanticResultQuery.data?.checkedAt)}</span>
                 </div>
-                {semanticResultQuery.data?.llmFindings ? <JsonBlock className="mt-3 max-h-52" value={semanticResultQuery.data.llmFindings} /> : null}
+                {semanticResultQuery.data?.llmFindings ? <JsonViewButton title="Checker Findings" value={semanticResultQuery.data.llmFindings} label="View Findings" /> : null}
               </div>
             </div>
           </div>
