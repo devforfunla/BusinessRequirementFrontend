@@ -246,7 +246,7 @@ export function AtomicStagePage() {
   const atomicResultByRule = new Map(atomicResults.map((result) => [result.targetRuleId, result]))
   const humanRewriteParent = humanRewriteRule ? findParentSemanticRule(humanRewriteRule, semanticRules) : null
   const firstError =
-    workflowQuery.error || jobsQuery.error || semanticRulesQuery.error || atomicRulesQuery.error || atomicRunQuery.error || atomicResultsQuery.error
+    workflowQuery.error || jobsQuery.error || semanticRulesQuery.error || atomicRulesQuery.error || atomicRunQuery.error || atomicResultsQuery.error || extractionGroupsQuery.error
 
   return (
     <div className="space-y-5">
