@@ -4,6 +4,43 @@ import { AlertCircle, Inbox, X } from 'lucide-react'
 import { parseJsonText } from '../api'
 import { cn } from '../utils'
 
+export type TabItem = { id: string; label: string; icon?: ReactNode }
+
+export function Tabs({
+  tabs,
+  activeTab,
+  onChange,
+}: {
+  tabs: TabItem[]
+  activeTab: string
+  onChange: (tabId: string) => void
+}) {
+  return (
+    <div className="flex border-b border-[#e3e8f0]" role="tablist">
+      {tabs.map((tab) => {
+        const isActive = tab.id === activeTab
+        return (
+          <button
+            key={tab.id}
+            role="tab"
+            aria-selected={isActive}
+            onClick={() => onChange(tab.id)}
+            className={cn(
+              'inline-flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition',
+              isActive
+                ? 'border-[#1f6feb] text-[#1f6feb]'
+                : 'border-transparent text-[#667085] hover:border-[#c8d0dc] hover:text-[#344054]',
+            )}
+          >
+            {tab.icon}
+            {tab.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: 'primary' | 'secondary' | 'ghost' | 'danger'
   size?: 'sm' | 'md' | 'icon'
@@ -122,9 +159,11 @@ export function StatusPill({ value }: { value?: string | null }) {
       ? 'border-[#9bd4b5] bg-[#ecfdf3] text-[#067647]'
       : normalized === 'FAILED' || normalized === 'REJECTED' || normalized === 'BLOCKED'
         ? 'border-[#f7b4ae] bg-[#fff1f0] text-[#b42318]'
-        : normalized === 'RUNNING' || normalized === 'PROCESSING' || normalized === 'QUEUED' || normalized === 'DRAFT'
-          ? 'border-[#b8ccf0] bg-[#eff6ff] text-[#175cd3]'
-          : 'border-[#d8dee8] bg-[#f8fafc] text-[#475467]'
+        : normalized === 'PARTIAL_SUCCESS'
+          ? 'border-[#f5c97a] bg-[#fffbeb] text-[#b54708]'
+          : normalized === 'RUNNING' || normalized === 'PROCESSING' || normalized === 'QUEUED' || normalized === 'DRAFT'
+            ? 'border-[#b8ccf0] bg-[#eff6ff] text-[#175cd3]'
+            : 'border-[#d8dee8] bg-[#f8fafc] text-[#475467]'
   return <span className={cn('inline-flex rounded-full border px-2 py-0.5 text-xs font-medium', style)}>{normalized}</span>
 }
 

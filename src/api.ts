@@ -45,8 +45,22 @@ export type AsyncJob = {
   inputPayload?: string | null
   resultPayload?: string | null
   errorMessage?: string | null
+  triggeredByJobId?: string | null
   createdAt?: string | null
   updatedAt?: string | null
+}
+
+export type ExtractionGroup = {
+  id: string
+  jobId: string
+  workflowId: string
+  groupPrefix: string
+  semanticRuleIds?: string | null
+  semanticRuleCount: number
+  status: string
+  atomicRulesCount: number
+  errorMessage?: string | null
+  createdAt?: string | null
 }
 
 export type WorkflowRecord = {
@@ -412,6 +426,10 @@ export const atomicMakerApi = {
       http.post(atomicPath(`/maker/extract-atomic/${encodeURIComponent(workflowId)}`), null, {
         params: { reviewerId },
       }),
+    ),
+  extractionGroups: (workflowId: string) =>
+    fromResponse<ExtractionGroup[]>(
+      http.get(atomicPath(`/workflows/${encodeURIComponent(workflowId)}/extraction-groups`)),
     ),
 }
 

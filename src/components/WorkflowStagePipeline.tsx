@@ -2,13 +2,15 @@ import { Link } from 'react-router-dom'
 import { Check } from 'lucide-react'
 import { cn } from '../utils'
 
-export type WorkflowStage = 'semantic' | 'atomic' | 'test-cases'
+export type WorkflowStage = 'semantic' | 'atomic' | 'test-cases' | 'bdd' | 'test-scripts'
 
 const stages = [
-  { id: 'semantic', label: 'Semantic Rule' },
-  { id: 'atomic', label: 'Atomic Rule' },
-  { id: 'test-cases', label: 'Test Cases' },
-] satisfies Array<{ id: WorkflowStage; label: string }>
+  { id: 'semantic', label: 'Semantic Rule', group: 'Business Analysis' },
+  { id: 'atomic', label: 'Atomic Rule', group: 'Business Analysis' },
+  { id: 'test-cases', label: 'Test Case', group: '' },
+  { id: 'bdd', label: 'BDD', group: '' },
+  { id: 'test-scripts', label: 'Test Script', group: '' },
+] satisfies Array<{ id: WorkflowStage; label: string; group: string }>
 
 export function WorkflowStagePipeline({ workflowId, activeStage }: { workflowId: string; activeStage: WorkflowStage }) {
   const activeIndex = Math.max(
@@ -19,26 +21,32 @@ export function WorkflowStagePipeline({ workflowId, activeStage }: { workflowId:
 
   return (
     <nav className="overflow-x-auto rounded-lg border border-[#d8dee8] bg-white px-4 py-3 shadow-sm" aria-label="Workflow stages">
-      <div className="relative mx-auto min-w-[360px] max-w-xl px-2">
+      <div className="relative mx-auto min-w-[520px] max-w-3xl px-2">
+        {/* Track background */}
         <div
-          className="absolute left-[16.6667%] right-[16.6667%] top-[1.375rem] h-1.5 -translate-y-1/2 rounded-full bg-[#edf2f7]"
+          className="absolute left-[10%] right-[10%] top-[1.375rem] h-1.5 -translate-y-1/2 rounded-full bg-[#edf2f7]"
           aria-hidden="true"
         />
+        {/* Track fill */}
         <div
-          className="absolute left-[16.6667%] top-[1.375rem] h-1.5 -translate-y-1/2 rounded-full bg-[#0b65a8] transition-all duration-300"
-          style={{ width: `calc(66.6666% * ${progressRatio})` }}
+          className="absolute left-[10%] top-[1.375rem] h-1.5 -translate-y-1/2 rounded-full bg-[#0b65a8] transition-all duration-300"
+          style={{ width: `calc(80% * ${progressRatio})` }}
           aria-hidden="true"
         />
-        <ol className="relative z-10 grid grid-cols-3">
+        <ol className="relative z-10 grid" style={{ gridTemplateColumns: `repeat(${stages.length}, 1fr)` }}>
         {stages.map((stage, index) => {
           const isActive = stage.id === activeStage
           const isComplete = index < activeIndex
           const isReached = index <= activeIndex
+          // BDD and test-scripts routes don't exist yet — link to test-cases as placeholder
+          const href = stage.id === 'bdd' || stage.id === 'test-scripts'
+            ? `/workflows/${encodeURIComponent(workflowId)}/test-cases`
+            : `/workflows/${encodeURIComponent(workflowId)}/${stage.id}`
 
           return (
             <li key={stage.id} className="min-w-0">
               <Link
-                to={`/workflows/${encodeURIComponent(workflowId)}/${stage.id}`}
+                to={href}
                 aria-current={isActive ? 'step' : undefined}
                 className={cn(
                   'group flex min-w-0 flex-col items-center text-center outline-none transition',

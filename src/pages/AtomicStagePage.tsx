@@ -1,7 +1,17 @@
 import { type ReactNode, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CheckCircle2, Edit3, History, MessageSquareText, Play, RefreshCw, RotateCcw, ShieldCheck } from 'lucide-react'
+import {
+  CheckCircle2,
+  Edit3,
+  Eye,
+  History,
+  MessageSquareText,
+  Play,
+  RefreshCw,
+  RotateCcw,
+  ShieldCheck,
+} from 'lucide-react'
 import { toast } from 'sonner'
 import {
   atomicCheckerApi,
@@ -20,15 +30,29 @@ import {
   type AsyncJob,
   type AtomicRule,
   type CheckerRun,
+  type ExtractionGroup,
   type JsonRecord,
   type SemanticRule,
 } from '../api'
 import { JobSummaryCard, WorkflowStageJobs } from '../components/WorkflowStageJobs'
 import { WorkflowStagePipeline } from '../components/WorkflowStagePipeline'
-import { Button, EmptyState, ErrorNotice, JsonViewButton, Label, PageTitle, Panel, PanelHeader, StatusPill, TextArea } from '../components/ui'
+import {
+  Button,
+  EmptyState,
+  ErrorNotice,
+  JsonViewButton,
+  Label,
+  PageTitle,
+  Panel,
+  PanelHeader,
+  StatusPill,
+  Tabs,
+  type TabItem,
+  TextArea,
+} from '../components/ui'
 import { usePolledJob } from '../hooks'
 import { useAppStore } from '../store'
-import { formatDate } from '../utils'
+import { cn, formatDate } from '../utils'
 import { latestJob } from '../workflowJobUtils'
 
 type AtomicJobAction = 'atomic-maker' | 'atomic-checker'
@@ -38,6 +62,12 @@ const atomicJobTypes = ['ATOMIC_MAKER', 'ATOMIC_CHECKER', 'ATOMIC_REWRITE', 'EDI
 const approvedButtonClass =
   'border-[#079455] bg-[#079455] text-white hover:bg-[#079455] disabled:cursor-default disabled:opacity-100'
 
+const tabDefs: TabItem[] = [
+  { id: 'maker', label: 'Maker', icon: <Play className="h-3.5 w-3.5" /> },
+  { id: 'checker', label: 'Checker', icon: <ShieldCheck className="h-3.5 w-3.5" /> },
+  { id: 'review', label: 'Review', icon: <Eye className="h-3.5 w-3.5" /> },
+]
+
 export function AtomicStagePage() {
   const { workflowId = '' } = useParams()
   const queryClient = useQueryClient()
@@ -45,6 +75,7 @@ export function AtomicStagePage() {
   const setDocumentId = useAppStore((state) => state.setDocumentId)
   const setWorkflowId = useAppStore((state) => state.setWorkflowId)
   const [activeJobId, setActiveJobId] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<string>('maker')
   const [humanRewriteRule, setHumanRewriteRule] = useState<AtomicRule | null>(null)
   const [humanFeedback, setHumanFeedback] = useState('')
   const [editRule, setEditRule] = useState<AtomicRule | null>(null)
@@ -99,7 +130,25 @@ export function AtomicStagePage() {
     enabled: Boolean(workflowId),
   })
 
+  const extractionGroupsQuery = useQuery({
+    queryKey: ['extraction-groups', workflowId],
+    queryFn: () => atomicMakerApi.extractionGroups(workflowId),
+    enabled: Boolean(workflowId),
+  })
+
   const jobQuery = usePolledJob(activeJobId)
+
+  // Resolve default tab based on pipeline progress
+  useEffect(() => {
+    const jobs = jobsQuery.data || []
+    const atomicJobs = jobs.filter((j) => atomicJobTypes.includes(j.jobType))
+    const hasRewrite = atomicJobs.some((j) => j.jobType === 'ATOMIC_REWRITE' || j.jobType === 'EDIT')
+    const hasChecker = atomicJobs.some((j) => j.jobType === 'ATOMIC_CHECKER')
+    if (hasRewrite) setActiveTab('review')
+    else if (hasChecker) setActiveTab('checker')
+    else setActiveTab('maker')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jobsQuery.data !== undefined])
 
   useEffect(() => {
     const job = jobQuery.data
@@ -190,6 +239,7 @@ export function AtomicStagePage() {
   const semanticRules = semanticRulesQuery.data || []
   const atomicRules = atomicRulesQuery.data || []
   const atomicResults = atomicResultsQuery.data || []
+  const extractionGroups = extractionGroupsQuery.data || []
   const jobs = jobsQuery.data || []
   const approvedSemanticCount = semanticRules.filter((rule) => rule.approvalStatus === 'APPROVED').length
   const canRunAtomicMaker = semanticRules.length > 0 && approvedSemanticCount === semanticRules.length
@@ -201,7 +251,7 @@ export function AtomicStagePage() {
   return (
     <div className="space-y-5">
       <PageTitle
-        title="Workflow Atomic Stage"
+        title="Atomic Rule Stage"
         description={workflowId}
         actions={
           <>
@@ -223,145 +273,357 @@ export function AtomicStagePage() {
       <WorkflowStagePipeline workflowId={workflowId} activeStage="atomic" />
       {firstError ? <ErrorNotice message={getErrorMessage(firstError)} /> : null}
 
-      <WorkflowStageJobs title="Atomic Job Status" jobs={jobs} jobTypes={atomicJobTypes} />
-
+      {/* Tabs */}
       <Panel>
-        <PanelHeader
-          title="Atomic Summaries"
-          description="Atomic maker output and latest atomic checker result."
-          actions={
-            <>
-              <Button
-                variant="primary"
-                onClick={() => startJobMutation.mutate('atomic-maker')}
-                disabled={startJobMutation.isPending || Boolean(activeJobId) || !canRunAtomicMaker}
-                title={!canRunAtomicMaker ? 'Approve all semantic rules first' : undefined}
-              >
-                <Play className="h-4 w-4" aria-hidden="true" />
-                Run Atomic Maker
-              </Button>
-              <Button
-                onClick={() => startJobMutation.mutate('atomic-checker')}
-                disabled={startJobMutation.isPending || Boolean(activeJobId) || atomicRules.length === 0}
-              >
-                <ShieldCheck className="h-4 w-4" aria-hidden="true" />
-                Run Atomic Checker
-              </Button>
-            </>
-          }
-        />
-        <div className="grid gap-4 p-4 lg:grid-cols-2">
-          <JobSummaryCard title="Maker Summary" job={latestJob(jobs, 'ATOMIC_MAKER')} />
-          <CheckerSummary title="Checker Summary" run={atomicRunQuery.data} />
-        </div>
-      </Panel>
+        <Tabs tabs={tabDefs} activeTab={activeTab} onChange={setActiveTab} />
 
-      <Panel>
-        <PanelHeader title="Atomic Rules" description={`${atomicRules.length} latest atomic rule${atomicRules.length === 1 ? '' : 's'}`} />
-        {atomicRules.length === 0 && !atomicRulesQuery.isLoading ? (
-          <div className="p-4"><EmptyState title="No atomic rules yet" description="Approve semantic rules, then run atomic maker." /></div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[1780px] border-collapse text-left text-sm">
-              <thead className="bg-[#f8fafc] text-xs uppercase text-[#667085]">
-                <tr>
-                  <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Rule</th>
-                  <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Semantic Parent</th>
-                  <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Status</th>
-                  <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Checker</th>
-                  <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Summary</th>
-                  <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Atomic JSON</th>
-                  <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Checker JSON</th>
-                  <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {atomicRules.map((rule) => {
-                  const result = atomicResultByRule.get(rule.id)
-                  const parent = findParentSemanticRule(rule, semanticRules)
-                  const isApproved = rule.status === 'APPROVED'
-                  return (
-                    <tr key={rule.id} className="border-b border-[#edf1f6] align-top last:border-0">
-                      <td className="px-4 py-3">
-                        <p className="font-medium text-[#172033]">{getAtomicRuleCode(rule)}</p>
-                        <p className="text-xs text-[#667085]">
-                          v{rule.atomicVersion ?? 0}
-                          {rule.llmSection ? ` - ${rule.llmSection}` : ''}
-                        </p>
-                      </td>
-                      <td className="px-4 py-3 text-[#475467]">
-                        {parent ? (
-                          <Link
-                            className="font-medium text-[#175cd3] hover:underline"
-                            to={`/workflows/${encodeURIComponent(workflowId)}/semantic/${encodeURIComponent(parent.id)}`}
-                          >
-                            {getSemanticRuleCode(parent)}
-                          </Link>
-                        ) : (
-                          getAtomicRuleSemanticCode(rule)
-                        )}
-                      </td>
-                      <td className="px-4 py-3"><StatusPill value={rule.status} /></td>
-                      <td className="px-4 py-3"><StatusPill value={result?.llmIsPassing || 'NOT_CHECKED'} /></td>
-                      <td className="max-w-xs px-4 py-3 text-[#475467]">
-                        <TextDetails text={getAtomicRuleSummary(rule) || '-'} />
-                      </td>
-                      <td className="w-[100px] px-4 py-3">
-                        <JsonViewButton title={`${getAtomicRuleCode(rule)} JSON`} value={rule.llmOutputJson || rule.content} />
-                      </td>
-                      <td className="w-[100px] px-4 py-3">
-                        <JsonViewButton title={`${getAtomicRuleCode(rule)} Checker`} value={result?.llmReviewEntry || result?.llmFindings} />
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-wrap gap-2">
-                          <Button
-                            size="sm"
-                            onClick={() => approveAtomicMutation.mutate(rule.id)}
-                            disabled={approveAtomicMutation.isPending || isApproved}
-                            className={isApproved ? approvedButtonClass : undefined}
-                          >
-                            <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
-                            {isApproved ? 'Approved' : 'Approve'}
-                          </Button>
-                          <Button
-                            size="sm"
-                            title={!parent ? 'Semantic parent not found' : !result ? 'Run atomic checker first' : undefined}
-                            onClick={() => {
-                              if (!parent) return
-                              rewriteGroupMutation.mutate({
-                                semanticRuleId: parent.id,
-                                rewriteMode: 'CHECKER_FEEDBACK',
-                              })
-                            }}
-                            disabled={rewriteGroupMutation.isPending || Boolean(activeJobId) || !parent || !result}
-                          >
-                            <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
-                            Checker rewrite
-                          </Button>
-                          <Button
-                            size="sm"
-                            title={!parent ? 'Semantic parent not found' : undefined}
-                            onClick={() => setHumanRewriteRule(rule)}
-                            disabled={rewriteGroupMutation.isPending || Boolean(activeJobId) || !parent}
-                          >
-                            <MessageSquareText className="h-3.5 w-3.5" aria-hidden="true" />
-                            Human rewrite
-                          </Button>
-                          <Button size="sm" onClick={() => openEditDialog(rule)} disabled={editAtomicMutation.isPending}>
-                            <Edit3 className="h-3.5 w-3.5" aria-hidden="true" />
-                            Edit
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+        {/* ===== Maker Tab ===== */}
+        {activeTab === 'maker' ? (
+          <div className="space-y-4 p-4">
+            <Panel>
+              <PanelHeader
+                title="Atomic Maker"
+                actions={
+                  <Button
+                    variant="primary"
+                    onClick={() => startJobMutation.mutate('atomic-maker')}
+                    disabled={startJobMutation.isPending || Boolean(activeJobId) || !canRunAtomicMaker}
+                    title={!canRunAtomicMaker ? 'Approve all semantic rules first' : undefined}
+                  >
+                    <Play className="h-4 w-4" aria-hidden="true" />
+                    Run Atomic Maker
+                  </Button>
+                }
+              />
+              <div className="p-4">
+                <JobSummaryCard title="Latest Atomic Maker" job={latestJob(jobs, 'ATOMIC_MAKER')} />
+              </div>
+            </Panel>
+
+            <WorkflowStageJobs title="Atomic Maker Jobs" jobs={jobs} jobTypes={['ATOMIC_MAKER']} />
+
+            {/* Extraction Groups drill-down */}
+            {extractionGroups.length > 0 ? (
+              <Panel>
+                <PanelHeader
+                  title="Extraction Groups"
+                  description={`${extractionGroups.length} parallel group${extractionGroups.length !== 1 ? 's' : ''}`}
+                />
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[800px] border-collapse text-left text-sm">
+                    <thead className="bg-[#f8fafc] text-xs uppercase text-[#667085]">
+                      <tr>
+                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Group</th>
+                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Status</th>
+                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Semantic Rules</th>
+                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Atomic Rules</th>
+                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Job ID</th>
+                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Error</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {extractionGroups.map((group) => (
+                        <tr key={group.id} className="border-b border-[#edf1f6] align-top last:border-0">
+                          <td className="px-4 py-3 font-medium text-[#172033]">{group.groupPrefix}</td>
+                          <td className="px-4 py-3"><StatusPill value={group.status} /></td>
+                          <td className="px-4 py-3 text-[#667085]">{group.semanticRuleCount}</td>
+                          <td className="px-4 py-3 text-[#667085]">{group.atomicRulesCount}</td>
+                          <td className="px-4 py-3">
+                            <span className="font-mono text-xs text-[#667085]">{group.jobId}</span>
+                          </td>
+                          <td className="max-w-xs px-4 py-3 text-xs text-[#b42318]">
+                            {group.errorMessage || '-'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Panel>
+            ) : null}
+
+            {/* Extracted atomic rules - read-only list */}
+            <Panel>
+              <PanelHeader
+                title="Extracted Atomic Rules"
+                description={`${atomicRules.length} atomic rule${atomicRules.length !== 1 ? 's' : ''}`}
+              />
+              {atomicRules.length === 0 ? (
+                <div className="p-4">
+                  <EmptyState title="No atomic rules yet" description="Approve semantic rules, then run atomic maker." />
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[1000px] border-collapse text-left text-sm">
+                    <thead className="bg-[#f8fafc] text-xs uppercase text-[#667085]">
+                      <tr>
+                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Rule Code</th>
+                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Semantic Parent</th>
+                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Version</th>
+                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Status</th>
+                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Summary</th>
+                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">JSON</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {atomicRules.map((rule) => {
+                        const parent = findParentSemanticRule(rule, semanticRules)
+                        return (
+                          <tr key={rule.id} className="border-b border-[#edf1f6] align-top last:border-0">
+                            <td className="px-4 py-3 font-medium text-[#172033]">{getAtomicRuleCode(rule)}</td>
+                            <td className="px-4 py-3 text-[#475467]">
+                              {parent ? (
+                                <Link
+                                  className="font-medium text-[#175cd3] hover:underline"
+                                  to={`/workflows/${encodeURIComponent(workflowId)}/semantic/${encodeURIComponent(parent.id)}`}
+                                >
+                                  {getSemanticRuleCode(parent)}
+                                </Link>
+                              ) : (
+                                getAtomicRuleSemanticCode(rule)
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-[#667085]">v{rule.atomicVersion ?? 0}</td>
+                            <td className="px-4 py-3"><StatusPill value={rule.status} /></td>
+                            <td className="max-w-xs px-4 py-3 text-[#475467]">
+                              <TextDetails text={getAtomicRuleSummary(rule) || '-'} />
+                            </td>
+                            <td className="px-4 py-3">
+                              <JsonViewButton title={`${getAtomicRuleCode(rule)} JSON`} value={rule.llmOutputJson || rule.content} />
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Panel>
           </div>
-        )}
+        ) : null}
+
+        {/* ===== Checker Tab ===== */}
+        {activeTab === 'checker' ? (
+          <div className="space-y-4 p-4">
+            {/* Governance banner */}
+            <CheckerGovernanceBanner run={atomicRunQuery.data} />
+
+            <WorkflowStageJobs title="Atomic Checker Jobs" jobs={jobs} jobTypes={['ATOMIC_CHECKER']} />
+
+            <Panel>
+              <PanelHeader
+                title="Checker Summary"
+                actions={
+                  <Button
+                    onClick={() => startJobMutation.mutate('atomic-checker')}
+                    disabled={startJobMutation.isPending || Boolean(activeJobId) || atomicRules.length === 0}
+                  >
+                    <ShieldCheck className="h-4 w-4" aria-hidden="true" />
+                    Run Atomic Checker
+                  </Button>
+                }
+              />
+              <div className="p-4">
+                <CheckerSummary title="Latest Checker Run" run={atomicRunQuery.data} />
+              </div>
+            </Panel>
+
+            {/* Per-rule findings - read-only */}
+            <Panel>
+              <PanelHeader
+                title="Per-Rule Findings"
+                description={`${atomicResults.length} rule${atomicResults.length !== 1 ? 's' : ''} checked`}
+              />
+              {atomicResults.length === 0 ? (
+                <div className="p-4">
+                  <EmptyState title="No checker findings yet" description="Run the atomic checker to see per-rule results." />
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[1200px] border-collapse text-left text-sm">
+                    <thead className="bg-[#f8fafc] text-xs uppercase text-[#667085]">
+                      <tr>
+                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Rule</th>
+                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Checker Result</th>
+                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Blocking</th>
+                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Quality</th>
+                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Checker Job</th>
+                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Maker Job</th>
+                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Checked At</th>
+                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Details</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {atomicResults.map((result) => {
+                        const atomicRule = atomicRules.find((r) => r.id === result.targetRuleId)
+                        // Find the checker job to get its triggeredByJobId (maker lineage)
+                        const checkerJob = jobs.find((j) => j.id === result.checkerJobId)
+                        const makerJobId = checkerJob?.triggeredByJobId
+                        return (
+                          <tr key={result.id} className="border-b border-[#edf1f6] align-top last:border-0">
+                            <td className="px-4 py-3 font-medium text-[#172033]">
+                              {atomicRule ? getAtomicRuleCode(atomicRule) : result.targetRuleId}
+                            </td>
+                            <td className="px-4 py-3"><StatusPill value={result.llmIsPassing} /></td>
+                            <td className="px-4 py-3 text-[#667085]">{result.calcBlockingCategory || '-'}</td>
+                            <td className="px-4 py-3 text-[#667085]">{result.calcQualityScore || '-'}</td>
+                            <td className="px-4 py-3">
+                              <span className="font-mono text-xs text-[#667085]">{result.checkerJobId}</span>
+                            </td>
+                            <td className="px-4 py-3">
+                              {makerJobId ? (
+                                <span className="font-mono text-xs text-[#175cd3]">{makerJobId}</span>
+                              ) : (
+                                <span className="text-xs text-[#98a2b3]">-</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-[#667085]">{formatDate(result.checkedAt)}</td>
+                            <td className="px-4 py-3">
+                              <JsonViewButton
+                                title="Checker Findings"
+                                value={result.llmReviewEntry || result.llmFindings}
+                              />
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Panel>
+          </div>
+        ) : null}
+
+        {/* ===== Review Tab ===== */}
+        {activeTab === 'review' ? (
+          <div className="space-y-4 p-4">
+            <WorkflowStageJobs title="Review Jobs" jobs={jobs} jobTypes={['ATOMIC_REWRITE', 'EDIT']} />
+
+            <Panel>
+              <PanelHeader
+                title="Atomic Rules Review"
+                description={`${atomicRules.length} atomic rule${atomicRules.length !== 1 ? 's' : ''}`}
+                actions={
+                  <Button
+                    variant="primary"
+                    onClick={() => startJobMutation.mutate('atomic-maker')}
+                    disabled={startJobMutation.isPending || Boolean(activeJobId) || !canRunAtomicMaker}
+                    title={!canRunAtomicMaker ? 'Approve all semantic rules first' : undefined}
+                  >
+                    <Play className="h-4 w-4" aria-hidden="true" />
+                    Re-run Atomic Maker
+                  </Button>
+                }
+              />
+              {atomicRules.length === 0 && !atomicRulesQuery.isLoading ? (
+                <div className="p-4"><EmptyState title="No atomic rules yet" description="Approve semantic rules, then run atomic maker." /></div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[1780px] border-collapse text-left text-sm">
+                    <thead className="bg-[#f8fafc] text-xs uppercase text-[#667085]">
+                      <tr>
+                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Rule</th>
+                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Semantic Parent</th>
+                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Status</th>
+                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Checker</th>
+                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Summary</th>
+                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Atomic JSON</th>
+                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Checker JSON</th>
+                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {atomicRules.map((rule) => {
+                        const result = atomicResultByRule.get(rule.id)
+                        const parent = findParentSemanticRule(rule, semanticRules)
+                        const isApproved = rule.status === 'APPROVED'
+                        return (
+                          <tr key={rule.id} className="border-b border-[#edf1f6] align-top last:border-0">
+                            <td className="px-4 py-3">
+                              <p className="font-medium text-[#172033]">{getAtomicRuleCode(rule)}</p>
+                              <p className="text-xs text-[#667085]">
+                                v{rule.atomicVersion ?? 0}
+                                {rule.llmSection ? ` - ${rule.llmSection}` : ''}
+                              </p>
+                            </td>
+                            <td className="px-4 py-3 text-[#475467]">
+                              {parent ? (
+                                <Link
+                                  className="font-medium text-[#175cd3] hover:underline"
+                                  to={`/workflows/${encodeURIComponent(workflowId)}/semantic/${encodeURIComponent(parent.id)}`}
+                                >
+                                  {getSemanticRuleCode(parent)}
+                                </Link>
+                              ) : (
+                                getAtomicRuleSemanticCode(rule)
+                              )}
+                            </td>
+                            <td className="px-4 py-3"><StatusPill value={rule.status} /></td>
+                            <td className="px-4 py-3"><StatusPill value={result?.llmIsPassing || 'NOT_CHECKED'} /></td>
+                            <td className="max-w-xs px-4 py-3 text-[#475467]">
+                              <TextDetails text={getAtomicRuleSummary(rule) || '-'} />
+                            </td>
+                            <td className="w-[100px] px-4 py-3">
+                              <JsonViewButton title={`${getAtomicRuleCode(rule)} JSON`} value={rule.llmOutputJson || rule.content} />
+                            </td>
+                            <td className="w-[100px] px-4 py-3">
+                              <JsonViewButton title={`${getAtomicRuleCode(rule)} Checker`} value={result?.llmReviewEntry || result?.llmFindings} />
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="flex flex-wrap gap-2">
+                                <Button
+                                  size="sm"
+                                  onClick={() => approveAtomicMutation.mutate(rule.id)}
+                                  disabled={approveAtomicMutation.isPending || isApproved}
+                                  className={isApproved ? approvedButtonClass : undefined}
+                                >
+                                  <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+                                  {isApproved ? 'Approved' : 'Approve'}
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  title={!parent ? 'Semantic parent not found' : !result ? 'Run atomic checker first' : undefined}
+                                  onClick={() => {
+                                    if (!parent) return
+                                    rewriteGroupMutation.mutate({
+                                      semanticRuleId: parent.id,
+                                      rewriteMode: 'CHECKER_FEEDBACK',
+                                    })
+                                  }}
+                                  disabled={rewriteGroupMutation.isPending || Boolean(activeJobId) || !parent || !result}
+                                >
+                                  <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+                                  Checker rewrite
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  title={!parent ? 'Semantic parent not found' : undefined}
+                                  onClick={() => setHumanRewriteRule(rule)}
+                                  disabled={rewriteGroupMutation.isPending || Boolean(activeJobId) || !parent}
+                                >
+                                  <MessageSquareText className="h-3.5 w-3.5" aria-hidden="true" />
+                                  Human rewrite
+                                </Button>
+                                <Button size="sm" onClick={() => openEditDialog(rule)} disabled={editAtomicMutation.isPending}>
+                                  <Edit3 className="h-3.5 w-3.5" aria-hidden="true" />
+                                  Edit
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Panel>
+          </div>
+        ) : null}
       </Panel>
 
+      {/* ===== Dialogs ===== */}
       {humanRewriteRule ? (
         <AtomicDialog
           title="Human Rewrite"
@@ -446,6 +708,8 @@ export function AtomicStagePage() {
   )
 }
 
+// ==================== Helper Functions ====================
+
 function findParentSemanticRule(rule: AtomicRule, semanticRules: SemanticRule[]) {
   if (rule.semanticRuleId) {
     const byId = semanticRules.find((semanticRule) => semanticRule.id === rule.semanticRuleId)
@@ -522,6 +786,36 @@ function TextDetails({ text }: { text: string }) {
       </summary>
       <div className="border-t border-[#e3e8f0] p-3 text-xs">{text}</div>
     </details>
+  )
+}
+
+function CheckerGovernanceBanner({ run }: { run?: CheckerRun | null }) {
+  if (!run) return null
+  const gate = run.calcGovernanceGate || 'UNKNOWN'
+  const bgColor =
+    gate === 'PASSED' ? 'border-[#9bd4b5] bg-[#ecfdf3]' :
+    gate === 'FAILED' ? 'border-[#f7b4ae] bg-[#fff1f0]' :
+    'border-[#d8dee8] bg-[#f8fafc]'
+  const textColor =
+    gate === 'PASSED' ? 'text-[#067647]' :
+    gate === 'FAILED' ? 'text-[#b42318]' :
+    'text-[#475467]'
+
+  return (
+    <div className={cn('flex items-center gap-3 rounded-lg border p-4', bgColor)}>
+      <ShieldCheck className={cn('h-6 w-6', textColor)} />
+      <div>
+        <p className={cn('text-sm font-semibold', textColor)}>
+          Governance Gate: {gate}
+        </p>
+        {run.llmHighLevelFeedback ? (
+          <p className="mt-1 text-sm text-[#475467]">{run.llmHighLevelFeedback}</p>
+        ) : null}
+      </div>
+      <div className="ml-auto">
+        <StatusPill value={gate} />
+      </div>
+    </div>
   )
 }
 

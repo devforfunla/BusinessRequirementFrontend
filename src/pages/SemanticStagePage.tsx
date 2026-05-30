@@ -1,7 +1,18 @@
 import { type ReactNode, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CheckCircle2, Edit3, History, MessageSquareText, RefreshCw, RotateCcw, ShieldCheck, ArrowRight } from 'lucide-react'
+import {
+  ArrowRight,
+  CheckCircle2,
+  Edit3,
+  Eye,
+  History,
+  MessageSquareText,
+  Play,
+  RefreshCw,
+  RotateCcw,
+  ShieldCheck,
+} from 'lucide-react'
 import { toast } from 'sonner'
 import {
   getErrorMessage,
@@ -22,7 +33,20 @@ import {
 } from '../api'
 import { JobSummaryCard, WorkflowStageJobs } from '../components/WorkflowStageJobs'
 import { WorkflowStagePipeline } from '../components/WorkflowStagePipeline'
-import { Button, EmptyState, ErrorNotice, JsonViewButton, Label, PageTitle, Panel, PanelHeader, StatusPill, TextArea } from '../components/ui'
+import {
+  Button,
+  EmptyState,
+  ErrorNotice,
+  JsonViewButton,
+  Label,
+  PageTitle,
+  Panel,
+  PanelHeader,
+  StatusPill,
+  Tabs,
+  type TabItem,
+  TextArea,
+} from '../components/ui'
 import { usePolledJob } from '../hooks'
 import { useAppStore } from '../store'
 import { formatDate } from '../utils'
@@ -34,6 +58,12 @@ const semanticJobTypes = ['SEMANTIC_MAKER', 'SEMANTIC_CHECKER', 'SEMANTIC_REWRIT
 const approvedButtonClass =
   'border-[#079455] bg-[#079455] text-white hover:bg-[#079455] disabled:cursor-default disabled:opacity-100'
 
+const tabs: TabItem[] = [
+  { id: 'maker', label: 'Maker', icon: <Play className="h-3.5 w-3.5" /> },
+  { id: 'checker', label: 'Checker', icon: <ShieldCheck className="h-3.5 w-3.5" /> },
+  { id: 'review', label: 'Review', icon: <Eye className="h-3.5 w-3.5" /> },
+]
+
 export function SemanticStagePage() {
   const { workflowId = '' } = useParams()
   const navigate = useNavigate()
@@ -42,6 +72,7 @@ export function SemanticStagePage() {
   const setDocumentId = useAppStore((state) => state.setDocumentId)
   const setWorkflowId = useAppStore((state) => state.setWorkflowId)
   const [activeJobId, setActiveJobId] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<string>('maker')
   const [humanRewriteRule, setHumanRewriteRule] = useState<SemanticRule | null>(null)
   const [humanFeedback, setHumanFeedback] = useState('')
   const [editRule, setEditRule] = useState<SemanticRule | null>(null)
@@ -91,6 +122,19 @@ export function SemanticStagePage() {
   })
 
   const jobQuery = usePolledJob(activeJobId)
+
+  // Resolve default tab based on pipeline progress
+  useEffect(() => {
+    const jobs = jobsQuery.data || []
+    const semanticJobs = jobs.filter((j) => semanticJobTypes.includes(j.jobType))
+    const hasRewrite = semanticJobs.some((j) => j.jobType === 'SEMANTIC_REWRITE' || j.jobType === 'SEMANTIC_EDIT')
+    const hasChecker = semanticJobs.some((j) => j.jobType === 'SEMANTIC_CHECKER')
+    if (hasRewrite) setActiveTab('review')
+    else if (hasChecker) setActiveTab('checker')
+    else setActiveTab('maker')
+    // Only run on initial load
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jobsQuery.data !== undefined])
 
   useEffect(() => {
     const job = jobQuery.data
@@ -240,7 +284,7 @@ export function SemanticStagePage() {
   return (
     <div className="space-y-5">
       <PageTitle
-        title="Workflow Semantic Stage"
+        title="Semantic Rule Stage"
         description={workflowId}
         actions={
           <>
@@ -262,148 +306,295 @@ export function SemanticStagePage() {
       <WorkflowStagePipeline workflowId={workflowId} activeStage="semantic" />
       {firstError ? <ErrorNotice message={getErrorMessage(firstError)} /> : null}
 
-      <WorkflowStageJobs title="Semantic Job Status" jobs={jobs} jobTypes={semanticJobTypes} />
-
+      {/* Tabs */}
       <Panel>
-        <PanelHeader
-          title="Semantic Summaries"
-          description="Semantic maker output and latest semantic checker result."
-          actions={
-            <>
-              <Button
-                onClick={() => startJobMutation.mutate('semantic-checker')}
-                disabled={startJobMutation.isPending || Boolean(activeJobId) || semanticRules.length === 0}
-              >
-                <ShieldCheck className="h-4 w-4" aria-hidden="true" />
-                Run Semantic Checker
-              </Button>
-            </>
-          }
-        />
-        <div className="grid gap-4 p-4 lg:grid-cols-2">
-          <JobSummaryCard title="Maker Summary" job={latestJob(jobs, 'SEMANTIC_MAKER')} />
-          <CheckerSummary title="Checker Summary" run={semanticRunQuery.data} />
-        </div>
-      </Panel>
+        <Tabs tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
 
-      <Panel>
-        <PanelHeader
-          title="Semantic Rules"
-          description={`${approvedSemanticCount}/${semanticRules.length} approved`}
-          actions={
-            <>
-              <Button
-                onClick={() => approveAllMutation.mutate()}
-                disabled={approveAllMutation.isPending || semanticRules.length === 0 || allSemanticRulesApproved}
-                className={allSemanticRulesApproved ? approvedButtonClass : undefined}
-              >
-                <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-                {allSemanticRulesApproved ? 'Approved' : 'Approve All'}
-              </Button>
-              <Button
-                onClick={() => proceedMutation.mutate()}
-                disabled={proceedMutation.isPending || semanticRules.length === 0}
-              >
-                <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                Proceed to Atomic
-              </Button>
-            </>
-          }
-        />
-        {semanticRules.length === 0 && !semanticRulesQuery.isLoading ? (
-          <div className="p-4"><EmptyState title="No semantic rules yet" description="Run semantic maker from the workflows page." /></div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[1780px] border-collapse text-left text-sm">
-              <thead className="bg-[#f8fafc] text-xs uppercase text-[#667085]">
-                <tr>
-                  <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Rule</th>
-                  <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Approval</th>
-                  <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Checker</th>
-                  <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Summary</th>
-                  <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Semantic JSON</th>
-                  <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Checker JSON</th>
-                  <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {semanticRules.map((rule) => {
-                  const result = semanticResultByRule.get(rule.id)
-                  const isApproved = rule.approvalStatus === 'APPROVED'
-                  return (
-                    <tr key={rule.id} className="border-b border-[#edf1f6] align-top last:border-0">
-                      <td className="px-4 py-3">
-                        <Link className="font-medium text-[#175cd3] hover:underline" to={`/workflows/${encodeURIComponent(workflowId)}/semantic/${encodeURIComponent(rule.id)}`}>
-                          {getSemanticRuleCode(rule)}
-                        </Link>
-                        <p className="text-xs text-[#667085]">
-                          v{rule.semanticVersion ?? 0}
-                          {rule.llmSection ? ` - ${rule.llmSection}` : ''}
-                        </p>
-                      </td>
-                      <td className="px-4 py-3"><StatusPill value={rule.approvalStatus} /></td>
-                      <td className="px-4 py-3">
-                        <StatusPill value={result?.llmIsPassing || 'NOT_CHECKED'} />
-                      </td>
-                      <td className="max-w-xs px-4 py-3 text-[#475467]">
-                        <TextDetails text={getSemanticRuleSummary(rule) || getSemanticRuleBusinessIntent(rule) || '-'} />
-                      </td>
-                      <td className="w-[100px] px-4 py-3">
-                        <JsonViewButton
-                          title={`${getSemanticRuleCode(rule)} JSON`}
-                          value={rule.llmOutputJson}
-                        />
-                      </td>
-                      <td className="w-[100px] px-4 py-3">
-                        <JsonViewButton
-                          title={`${getSemanticRuleCode(rule)} Checker`}
-                          value={result?.llmReviewEntry || result?.llmFindings}
-                        />
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-wrap gap-2">
-                          <Button
-                            size="sm"
-                            onClick={() => approveSemanticMutation.mutate(rule.id)}
-                            disabled={approveSemanticMutation.isPending || isApproved}
-                            className={isApproved ? approvedButtonClass : undefined}
-                          >
-                            <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
-                            {isApproved ? 'Approved' : 'Approve'}
-                          </Button>
-                          <Button
-                            size="sm"
-                            title={!result ? 'Run semantic checker first' : undefined}
-                            onClick={() =>
-                              rewriteSemanticMutation.mutate({
-                                semanticRuleId: rule.id,
-                                rewriteMode: 'CHECKER_FEEDBACK',
-                              })
-                            }
-                            disabled={rewriteSemanticMutation.isPending || Boolean(activeJobId) || !result}
-                          >
-                            <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
-                            Checker rewrite
-                          </Button>
-                          <Button size="sm" onClick={() => setHumanRewriteRule(rule)} disabled={rewriteSemanticMutation.isPending || Boolean(activeJobId)}>
-                            <MessageSquareText className="h-3.5 w-3.5" aria-hidden="true" />
-                            Human rewrite
-                          </Button>
-                          <Button size="sm" onClick={() => openEditDialog(rule)} disabled={editSemanticMutation.isPending}>
-                            <Edit3 className="h-3.5 w-3.5" aria-hidden="true" />
-                            Edit
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+        {/* ===== Maker Tab ===== */}
+        {activeTab === 'maker' ? (
+          <div className="space-y-4 p-4">
+            <WorkflowStageJobs title="Semantic Maker Jobs" jobs={jobs} jobTypes={['SEMANTIC_MAKER']} />
+
+            <Panel>
+              <PanelHeader title="Maker Summary" />
+              <div className="p-4">
+                <JobSummaryCard title="Latest Semantic Maker" job={latestJob(jobs, 'SEMANTIC_MAKER')} />
+              </div>
+            </Panel>
+
+            {/* Extracted semantic rules - read-only list */}
+            <Panel>
+              <PanelHeader
+                title="Extracted Semantic Rules"
+                description={`${semanticRules.length} semantic rule${semanticRules.length !== 1 ? 's' : ''} extracted`}
+              />
+              {semanticRules.length === 0 ? (
+                <div className="p-4">
+                  <EmptyState title="No semantic rules yet" description="Run semantic maker from the documents page." />
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[900px] border-collapse text-left text-sm">
+                    <thead className="bg-[#f8fafc] text-xs uppercase text-[#667085]">
+                      <tr>
+                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Rule Code</th>
+                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Version</th>
+                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Section</th>
+                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Summary</th>
+                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Status</th>
+                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">JSON</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {semanticRules.map((rule) => (
+                        <tr key={rule.id} className="border-b border-[#edf1f6] align-top last:border-0">
+                          <td className="px-4 py-3">
+                            <Link
+                              className="font-medium text-[#175cd3] hover:underline"
+                              to={`/workflows/${encodeURIComponent(workflowId)}/semantic/${encodeURIComponent(rule.id)}`}
+                            >
+                              {getSemanticRuleCode(rule)}
+                            </Link>
+                          </td>
+                          <td className="px-4 py-3 text-[#667085]">v{rule.semanticVersion ?? 0}</td>
+                          <td className="px-4 py-3 text-[#667085]">{rule.llmSection || '-'}</td>
+                          <td className="max-w-xs px-4 py-3 text-[#475467]">
+                            <TextDetails text={getSemanticRuleSummary(rule) || getSemanticRuleBusinessIntent(rule) || '-'} />
+                          </td>
+                          <td className="px-4 py-3"><StatusPill value={rule.approvalStatus} /></td>
+                          <td className="px-4 py-3">
+                            <JsonViewButton title={`${getSemanticRuleCode(rule)} JSON`} value={rule.llmOutputJson} />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Panel>
           </div>
-        )}
+        ) : null}
+
+        {/* ===== Checker Tab ===== */}
+        {activeTab === 'checker' ? (
+          <div className="space-y-4 p-4">
+            {/* Governance banner */}
+            <CheckerGovernanceBanner run={semanticRunQuery.data} />
+
+            <WorkflowStageJobs title="Semantic Checker Jobs" jobs={jobs} jobTypes={['SEMANTIC_CHECKER']} />
+
+            <Panel>
+              <PanelHeader
+                title="Checker Summary"
+                actions={
+                  <Button
+                    onClick={() => startJobMutation.mutate('semantic-checker')}
+                    disabled={startJobMutation.isPending || Boolean(activeJobId) || semanticRules.length === 0}
+                  >
+                    <ShieldCheck className="h-4 w-4" aria-hidden="true" />
+                    Run Semantic Checker
+                  </Button>
+                }
+              />
+              <div className="p-4">
+                <CheckerSummary title="Latest Checker Run" run={semanticRunQuery.data} />
+              </div>
+            </Panel>
+
+            {/* Per-rule findings - read-only */}
+            <Panel>
+              <PanelHeader
+                title="Per-Rule Findings"
+                description={`${semanticResults.length} rule${semanticResults.length !== 1 ? 's' : ''} checked`}
+              />
+              {semanticResults.length === 0 ? (
+                <div className="p-4">
+                  <EmptyState title="No checker findings yet" description="Run the semantic checker to see per-rule results." />
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[1100px] border-collapse text-left text-sm">
+                    <thead className="bg-[#f8fafc] text-xs uppercase text-[#667085]">
+                      <tr>
+                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Rule</th>
+                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Checker Result</th>
+                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Blocking</th>
+                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Quality</th>
+                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Checker Job</th>
+                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Checked At</th>
+                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Details</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {semanticResults.map((result) => {
+                        const parentRule = semanticRules.find((r) => r.id === result.targetSemanticRuleId)
+                        return (
+                          <tr key={result.id} className="border-b border-[#edf1f6] align-top last:border-0">
+                            <td className="px-4 py-3">
+                              {parentRule ? (
+                                <Link
+                                  className="font-medium text-[#175cd3] hover:underline"
+                                  to={`/workflows/${encodeURIComponent(workflowId)}/semantic/${encodeURIComponent(parentRule.id)}`}
+                                >
+                                  {getSemanticRuleCode(parentRule)}
+                                </Link>
+                              ) : (
+                                <span className="text-[#667085]">{result.targetSemanticRuleId}</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3"><StatusPill value={result.llmIsPassing} /></td>
+                            <td className="px-4 py-3 text-[#667085]">{result.calcBlockingCategory || '-'}</td>
+                            <td className="px-4 py-3 text-[#667085]">{result.calcQualityScore || '-'}</td>
+                            <td className="px-4 py-3">
+                              <span className="font-mono text-xs text-[#667085]">{result.checkerJobId}</span>
+                            </td>
+                            <td className="px-4 py-3 text-[#667085]">{formatDate(result.checkedAt)}</td>
+                            <td className="px-4 py-3">
+                              <JsonViewButton
+                                title="Checker Findings"
+                                value={result.llmReviewEntry || result.llmFindings}
+                              />
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Panel>
+          </div>
+        ) : null}
+
+        {/* ===== Review Tab ===== */}
+        {activeTab === 'review' ? (
+          <div className="space-y-4 p-4">
+            {/* Rewrite/Edit job history */}
+            <WorkflowStageJobs title="Review Jobs" jobs={jobs} jobTypes={['SEMANTIC_REWRITE', 'SEMANTIC_EDIT']} />
+
+            {/* Actionable rules table */}
+            <Panel>
+              <PanelHeader
+                title="Semantic Rules Review"
+                description={`${approvedSemanticCount}/${semanticRules.length} approved`}
+                actions={
+                  <>
+                    <Button
+                      onClick={() => approveAllMutation.mutate()}
+                      disabled={approveAllMutation.isPending || semanticRules.length === 0 || allSemanticRulesApproved}
+                      className={allSemanticRulesApproved ? approvedButtonClass : undefined}
+                    >
+                      <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                      {allSemanticRulesApproved ? 'All Approved' : 'Approve All'}
+                    </Button>
+                    <Button
+                      onClick={() => proceedMutation.mutate()}
+                      disabled={proceedMutation.isPending || semanticRules.length === 0}
+                    >
+                      <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                      Proceed to Atomic
+                    </Button>
+                  </>
+                }
+              />
+              {semanticRules.length === 0 && !semanticRulesQuery.isLoading ? (
+                <div className="p-4"><EmptyState title="No semantic rules yet" description="Run semantic maker from the documents page." /></div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[1780px] border-collapse text-left text-sm">
+                    <thead className="bg-[#f8fafc] text-xs uppercase text-[#667085]">
+                      <tr>
+                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Rule</th>
+                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Approval</th>
+                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Checker</th>
+                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Summary</th>
+                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Semantic JSON</th>
+                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Checker JSON</th>
+                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {semanticRules.map((rule) => {
+                        const result = semanticResultByRule.get(rule.id)
+                        const isApproved = rule.approvalStatus === 'APPROVED'
+                        return (
+                          <tr key={rule.id} className="border-b border-[#edf1f6] align-top last:border-0">
+                            <td className="px-4 py-3">
+                              <Link className="font-medium text-[#175cd3] hover:underline" to={`/workflows/${encodeURIComponent(workflowId)}/semantic/${encodeURIComponent(rule.id)}`}>
+                                {getSemanticRuleCode(rule)}
+                              </Link>
+                              <p className="text-xs text-[#667085]">
+                                v{rule.semanticVersion ?? 0}
+                                {rule.llmSection ? ` - ${rule.llmSection}` : ''}
+                              </p>
+                            </td>
+                            <td className="px-4 py-3"><StatusPill value={rule.approvalStatus} /></td>
+                            <td className="px-4 py-3">
+                              <StatusPill value={result?.llmIsPassing || 'NOT_CHECKED'} />
+                            </td>
+                            <td className="max-w-xs px-4 py-3 text-[#475467]">
+                              <TextDetails text={getSemanticRuleSummary(rule) || getSemanticRuleBusinessIntent(rule) || '-'} />
+                            </td>
+                            <td className="w-[100px] px-4 py-3">
+                              <JsonViewButton
+                                title={`${getSemanticRuleCode(rule)} JSON`}
+                                value={rule.llmOutputJson}
+                              />
+                            </td>
+                            <td className="w-[100px] px-4 py-3">
+                              <JsonViewButton
+                                title={`${getSemanticRuleCode(rule)} Checker`}
+                                value={result?.llmReviewEntry || result?.llmFindings}
+                              />
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="flex flex-wrap gap-2">
+                                <Button
+                                  size="sm"
+                                  onClick={() => approveSemanticMutation.mutate(rule.id)}
+                                  disabled={approveSemanticMutation.isPending || isApproved}
+                                  className={isApproved ? approvedButtonClass : undefined}
+                                >
+                                  <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+                                  {isApproved ? 'Approved' : 'Approve'}
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  title={!result ? 'Run semantic checker first' : undefined}
+                                  onClick={() =>
+                                    rewriteSemanticMutation.mutate({
+                                      semanticRuleId: rule.id,
+                                      rewriteMode: 'CHECKER_FEEDBACK',
+                                    })
+                                  }
+                                  disabled={rewriteSemanticMutation.isPending || Boolean(activeJobId) || !result}
+                                >
+                                  <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+                                  Checker rewrite
+                                </Button>
+                                <Button size="sm" onClick={() => setHumanRewriteRule(rule)} disabled={rewriteSemanticMutation.isPending || Boolean(activeJobId)}>
+                                  <MessageSquareText className="h-3.5 w-3.5" aria-hidden="true" />
+                                  Human rewrite
+                                </Button>
+                                <Button size="sm" onClick={() => openEditDialog(rule)} disabled={editSemanticMutation.isPending}>
+                                  <Edit3 className="h-3.5 w-3.5" aria-hidden="true" />
+                                  Edit
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Panel>
+          </div>
+        ) : null}
       </Panel>
 
+      {/* ===== Dialogs ===== */}
       {humanRewriteRule ? (
         <SemanticDialog
           title="Human Rewrite"
@@ -487,6 +678,8 @@ export function SemanticStagePage() {
   )
 }
 
+// ==================== Helper Components ====================
+
 function semanticJobSuccessMessage(jobType?: string | null) {
   if (jobType === 'SEMANTIC_REWRITE') return 'Semantic rewrite completed'
   if (jobType === 'SEMANTIC_EDIT') return 'Semantic edit completed'
@@ -561,6 +754,36 @@ function TextDetails({ text }: { text: string }) {
   )
 }
 
+function CheckerGovernanceBanner({ run }: { run?: CheckerRun | null }) {
+  if (!run) return null
+  const gate = run.calcGovernanceGate || 'UNKNOWN'
+  const bgColor =
+    gate === 'PASSED' ? 'border-[#9bd4b5] bg-[#ecfdf3]' :
+    gate === 'FAILED' ? 'border-[#f7b4ae] bg-[#fff1f0]' :
+    'border-[#d8dee8] bg-[#f8fafc]'
+  const textColor =
+    gate === 'PASSED' ? 'text-[#067647]' :
+    gate === 'FAILED' ? 'text-[#b42318]' :
+    'text-[#475467]'
+
+  return (
+    <div className={`flex items-center gap-3 rounded-lg border p-4 ${bgColor}`}>
+      <ShieldCheck className={`h-6 w-6 ${textColor}`} />
+      <div>
+        <p className={`text-sm font-semibold ${textColor}`}>
+          Governance Gate: {gate}
+        </p>
+        {run.llmHighLevelFeedback ? (
+          <p className="mt-1 text-sm text-[#475467]">{run.llmHighLevelFeedback}</p>
+        ) : null}
+      </div>
+      <div className="ml-auto">
+        <StatusPill value={gate} />
+      </div>
+    </div>
+  )
+}
+
 function CheckerSummary({ title, run }: { title: string; run?: CheckerRun | null }) {
   if (!run) {
     return (
@@ -570,7 +793,7 @@ function CheckerSummary({ title, run }: { title: string; run?: CheckerRun | null
       </div>
     )
   }
-  
+
   const metrics = parseJsonText(run.calcGovernanceMetricsJson) as Record<string, unknown> | null
   const summary = parseJsonText(run.calcSummaryJson) as Record<string, unknown> | null
   const qualityScore = typeof metrics?.overall_quality_score === 'number' ? metrics.overall_quality_score : null
@@ -585,7 +808,7 @@ function CheckerSummary({ title, run }: { title: string; run?: CheckerRun | null
         <p className="text-sm font-semibold text-[#344054]">{title}</p>
         <StatusPill value={run.calcGovernanceGate} />
       </div>
-      
+
       {(totalChecks != null) ? (
         <div className="mt-3 flex flex-wrap gap-3 text-xs">
           <span className="rounded bg-[#f0f5ff] px-2 py-0.5 text-[#175cd3]">
@@ -603,7 +826,7 @@ function CheckerSummary({ title, run }: { title: string; run?: CheckerRun | null
           )}
         </div>
       ) : null}
-      
+
       {qualityScore != null ? (
         <div className="mt-2 flex flex-wrap gap-3 text-xs">
           <span className="rounded bg-[#f0f5ff] px-2 py-0.5 text-[#175cd3]">
@@ -616,7 +839,7 @@ function CheckerSummary({ title, run }: { title: string; run?: CheckerRun | null
           ) : null}
         </div>
       ) : null}
-      
+
       <p className="mt-3 text-xs text-[#667085]">{run.model || 'model unknown'} - {formatDate(run.checkedAt)}</p>
       {run.calcSummaryJson ? <JsonViewButton title="Checker JSON" value={run.calcSummaryJson} label="View JSON" /> : null}
     </div>
