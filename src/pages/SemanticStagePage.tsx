@@ -43,6 +43,7 @@ import {
   Panel,
   PanelHeader,
   StatusPill,
+  StickyScrollX,
   Tabs,
   type TabItem,
   TextArea,
@@ -333,7 +334,7 @@ export function SemanticStagePage() {
                   <EmptyState title="No semantic rules yet" description="Run semantic maker from the documents page." />
                 </div>
               ) : (
-                <div className="overflow-x-auto">
+                <StickyScrollX>
                   <table className="w-full min-w-[900px] border-collapse text-left text-sm">
                     <thead className="bg-[#f8fafc] text-xs uppercase text-[#667085]">
                       <tr>
@@ -369,7 +370,7 @@ export function SemanticStagePage() {
                       ))}
                     </tbody>
                   </table>
-                </div>
+                </StickyScrollX>
               )}
             </Panel>
           </div>
@@ -412,7 +413,7 @@ export function SemanticStagePage() {
                   <EmptyState title="No checker findings yet" description="Run the semantic checker to see per-rule results." />
                 </div>
               ) : (
-                <div className="overflow-x-auto">
+                <StickyScrollX>
                   <table className="w-full min-w-[1100px] border-collapse text-left text-sm">
                     <thead className="bg-[#f8fafc] text-xs uppercase text-[#667085]">
                       <tr>
@@ -460,7 +461,7 @@ export function SemanticStagePage() {
                       })}
                     </tbody>
                   </table>
-                </div>
+                </StickyScrollX>
               )}
             </Panel>
           </div>
@@ -500,7 +501,7 @@ export function SemanticStagePage() {
               {semanticRules.length === 0 && !semanticRulesQuery.isLoading ? (
                 <div className="p-4"><EmptyState title="No semantic rules yet" description="Run semantic maker from the documents page." /></div>
               ) : (
-                <div className="overflow-x-auto">
+                <StickyScrollX>
                   <table className="w-full min-w-[1780px] border-collapse text-left text-sm">
                     <thead className="bg-[#f8fafc] text-xs uppercase text-[#667085]">
                       <tr>
@@ -587,7 +588,7 @@ export function SemanticStagePage() {
                       })}
                     </tbody>
                   </table>
-                </div>
+                </StickyScrollX>
               )}
             </Panel>
           </div>

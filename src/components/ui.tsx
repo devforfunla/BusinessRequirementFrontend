@@ -1,5 +1,5 @@
 import type { ButtonHTMLAttributes, HTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react'
-import { useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { AlertCircle, Inbox, X } from 'lucide-react'
 import { parseJsonText } from '../api'
 import { cn } from '../utils'
@@ -37,6 +37,68 @@ export function Tabs({
           </button>
         )
       })}
+    </div>
+  )
+}
+
+/**
+ * Wraps horizontally-scrollable content (e.g. wide tables) and pins
+ * a scrollbar to the bottom of the viewport while the content is in view.
+ */
+export function StickyScrollX({ children, className }: { children: ReactNode; className?: string }) {
+  const contentRef = useRef<HTMLDivElement>(null)
+  const scrollbarRef = useRef<HTMLDivElement>(null)
+  const innerRef = useRef<HTMLDivElement>(null)
+  const syncing = useRef(false)
+
+  const syncWidth = useCallback(() => {
+    const content = contentRef.current
+    const inner = innerRef.current
+    if (!content || !inner) return
+    inner.style.width = `${content.scrollWidth}px`
+  }, [])
+
+  useEffect(() => {
+    syncWidth()
+    const content = contentRef.current
+    if (!content) return
+    const ro = new ResizeObserver(syncWidth)
+    ro.observe(content)
+    if (content.firstElementChild) ro.observe(content.firstElementChild)
+    return () => ro.disconnect()
+  }, [syncWidth])
+
+  const onContentScroll = useCallback(() => {
+    if (syncing.current) return
+    syncing.current = true
+    if (scrollbarRef.current && contentRef.current) {
+      scrollbarRef.current.scrollLeft = contentRef.current.scrollLeft
+    }
+    syncing.current = false
+  }, [])
+
+  const onScrollbarScroll = useCallback(() => {
+    if (syncing.current) return
+    syncing.current = true
+    if (contentRef.current && scrollbarRef.current) {
+      contentRef.current.scrollLeft = scrollbarRef.current.scrollLeft
+    }
+    syncing.current = false
+  }, [])
+
+  return (
+    <div className={cn('relative', className)}>
+      <div ref={contentRef} className="overflow-x-auto" onScroll={onContentScroll}>
+        {children}
+      </div>
+      <div
+        ref={scrollbarRef}
+        className="sticky bottom-0 overflow-x-auto overflow-y-hidden"
+        style={{ height: 12 }}
+        onScroll={onScrollbarScroll}
+      >
+        <div ref={innerRef} style={{ height: 1 }} />
+      </div>
     </div>
   )
 }

@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import { documentsApi, getErrorMessage } from '../api'
 import { useAppStore } from '../store'
 import { formatBytes, formatDate } from '../utils'
-import { Button, EmptyState, ErrorNotice, Label, PageTitle, Panel, PanelHeader, StatusPill, TextInput } from '../components/ui'
+import { Button, EmptyState, ErrorNotice, Label, PageTitle, Panel, PanelHeader, StatusPill, StickyScrollX, TextInput } from '../components/ui'
 
 export function DocumentsPage() {
   const navigate = useNavigate()
@@ -97,7 +97,7 @@ export function DocumentsPage() {
             <EmptyState title="No documents found" description="Upload a document to begin the two-phase rule workflow." />
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <StickyScrollX>
             <table className="w-full min-w-[900px] border-collapse text-left text-sm">
               <thead className="bg-[#f8fafc] text-xs uppercase text-[#667085]">
                 <tr>
@@ -161,7 +161,7 @@ export function DocumentsPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </StickyScrollX>
         )}
       </Panel>
     </div>

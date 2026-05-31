@@ -4,7 +4,7 @@ import { CheckCircle2, RefreshCw, Settings, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { getErrorMessage, skillsApi, type Skill } from '../api'
 import { formatDate } from '../utils'
-import { Button, EmptyState, ErrorNotice, JsonBlock, Label, PageTitle, Panel, PanelHeader, Select, StatusPill, TextArea, TextInput } from '../components/ui'
+import { Button, EmptyState, ErrorNotice, JsonBlock, Label, PageTitle, Panel, PanelHeader, Select, StatusPill, StickyScrollX, TextArea, TextInput } from '../components/ui'
 
 type SkillDraft = {
   name: string
@@ -119,7 +119,7 @@ export function SkillsPage() {
           {filteredSkills.length === 0 && !skillsQuery.isLoading ? (
             <div className="p-4"><EmptyState title="No skills found" description="Create a skill version or adjust filters." /></div>
           ) : (
-            <div className="overflow-x-auto">
+            <StickyScrollX>
               <table className="w-full min-w-[920px] border-collapse text-left text-sm">
                 <thead className="bg-[#f8fafc] text-xs uppercase text-[#667085]">
                   <tr>
@@ -174,7 +174,7 @@ export function SkillsPage() {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </StickyScrollX>
           )}
         </Panel>
 

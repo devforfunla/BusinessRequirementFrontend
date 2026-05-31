@@ -7,7 +7,7 @@ import { documentsApi, getErrorMessage, semanticMakerApi, workflowsApi } from '.
 import { usePolledJob } from '../hooks'
 import { useAppStore } from '../store'
 import { formatDate } from '../utils'
-import { Button, EmptyState, ErrorNotice, Label, PageTitle, Panel, PanelHeader, Select, StatusPill, TextInput } from '../components/ui'
+import { Button, EmptyState, ErrorNotice, Label, PageTitle, Panel, PanelHeader, Select, StatusPill, StickyScrollX, TextInput } from '../components/ui'
 
 export function WorkflowsPage() {
   const navigate = useNavigate()
@@ -143,7 +143,7 @@ export function WorkflowsPage() {
             <EmptyState title="No workflows found" description="Run semantic maker after a document transform is completed." />
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <StickyScrollX>
             <table className="w-full min-w-[820px] border-collapse text-left text-sm">
               <thead className="bg-[#f8fafc] text-xs uppercase text-[#667085]">
                 <tr>
@@ -182,7 +182,7 @@ export function WorkflowsPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </StickyScrollX>
         )}
       </Panel>
     </div>

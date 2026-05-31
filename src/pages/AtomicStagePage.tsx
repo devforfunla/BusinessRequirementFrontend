@@ -46,6 +46,7 @@ import {
   Panel,
   PanelHeader,
   StatusPill,
+  StickyScrollX,
   Tabs,
   type TabItem,
   TextArea,
@@ -309,7 +310,7 @@ export function AtomicStagePage() {
                   title="Extraction Groups"
                   description={`${extractionGroups.length} parallel group${extractionGroups.length !== 1 ? 's' : ''}`}
                 />
-                <div className="overflow-x-auto">
+                <StickyScrollX>
                   <table className="w-full min-w-[800px] border-collapse text-left text-sm">
                     <thead className="bg-[#f8fafc] text-xs uppercase text-[#667085]">
                       <tr>
@@ -338,7 +339,7 @@ export function AtomicStagePage() {
                       ))}
                     </tbody>
                   </table>
-                </div>
+                </StickyScrollX>
               </Panel>
             ) : null}
 
@@ -353,7 +354,7 @@ export function AtomicStagePage() {
                   <EmptyState title="No atomic rules yet" description="Approve semantic rules, then run atomic maker." />
                 </div>
               ) : (
-                <div className="overflow-x-auto">
+                <StickyScrollX>
                   <table className="w-full min-w-[1000px] border-collapse text-left text-sm">
                     <thead className="bg-[#f8fafc] text-xs uppercase text-[#667085]">
                       <tr>
@@ -396,7 +397,7 @@ export function AtomicStagePage() {
                       })}
                     </tbody>
                   </table>
-                </div>
+                </StickyScrollX>
               )}
             </Panel>
           </div>
@@ -439,7 +440,7 @@ export function AtomicStagePage() {
                   <EmptyState title="No checker findings yet" description="Run the atomic checker to see per-rule results." />
                 </div>
               ) : (
-                <div className="overflow-x-auto">
+                <StickyScrollX>
                   <table className="w-full min-w-[1200px] border-collapse text-left text-sm">
                     <thead className="bg-[#f8fafc] text-xs uppercase text-[#667085]">
                       <tr>
@@ -458,7 +459,7 @@ export function AtomicStagePage() {
                         const atomicRule = atomicRules.find((r) => r.id === result.targetRuleId)
                         // Find the checker job to get its triggeredByJobId (maker lineage)
                         const checkerJob = jobs.find((j) => j.id === result.checkerJobId)
-                        const makerJobId = checkerJob?.triggeredByJobId
+                        const makerJobId = checkerJob?.latestMakerJobId
                         return (
                           <tr key={result.id} className="border-b border-[#edf1f6] align-top last:border-0">
                             <td className="px-4 py-3 font-medium text-[#172033]">
@@ -489,7 +490,7 @@ export function AtomicStagePage() {
                       })}
                     </tbody>
                   </table>
-                </div>
+                </StickyScrollX>
               )}
             </Panel>
           </div>
@@ -519,7 +520,7 @@ export function AtomicStagePage() {
               {atomicRules.length === 0 && !atomicRulesQuery.isLoading ? (
                 <div className="p-4"><EmptyState title="No atomic rules yet" description="Approve semantic rules, then run atomic maker." /></div>
               ) : (
-                <div className="overflow-x-auto">
+                <StickyScrollX>
                   <table className="w-full min-w-[1780px] border-collapse text-left text-sm">
                     <thead className="bg-[#f8fafc] text-xs uppercase text-[#667085]">
                       <tr>
@@ -616,7 +617,7 @@ export function AtomicStagePage() {
                       })}
                     </tbody>
                   </table>
-                </div>
+                </StickyScrollX>
               )}
             </Panel>
           </div>

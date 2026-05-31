@@ -46,6 +46,7 @@ export type AsyncJob = {
   resultPayload?: string | null
   errorMessage?: string | null
   triggeredByJobId?: string | null
+  latestMakerJobId?: string | null
   createdAt?: string | null
   updatedAt?: string | null
 }
