@@ -137,6 +137,19 @@ export type AtomicRuleOperationResponse = {
   updatedAt?: string | null
 }
 
+export type FieldDiff = {
+  changed: boolean
+  oldValue?: string | null
+  newValue?: string | null
+}
+
+export type RuleCompareResponse = {
+  atomicRuleCode: string
+  version1: AtomicRule
+  version2: AtomicRule
+  diff: Record<string, FieldDiff>
+}
+
 export type CheckerRun = {
   id: string
   checkerJobId: string
@@ -450,6 +463,12 @@ export const atomicRulesApi = {
       http.post(atomicPath(`/atomic-rules/${encodeURIComponent(atomicRuleId)}/edit-by-human`), {
         editedContent,
         editorId,
+      }),
+    ),
+  compareVersions: (atomicRuleCode: string, workflowId: string, version1: number, version2: number) =>
+    fromResponse<RuleCompareResponse>(
+      http.get(atomicPath(`/atomic-rules/${encodeURIComponent(atomicRuleCode)}/compare`), {
+        params: { workflowId, version1, version2 },
       }),
     ),
 }

@@ -63,6 +63,7 @@ const tabs: TabItem[] = [
   { id: 'maker', label: 'Maker', icon: <Play className="h-3.5 w-3.5" /> },
   { id: 'checker', label: 'Checker', icon: <ShieldCheck className="h-3.5 w-3.5" /> },
   { id: 'review', label: 'Review', icon: <Eye className="h-3.5 w-3.5" /> },
+  { id: 'history', label: 'Job History', icon: <History className="h-3.5 w-3.5" /> },
 ]
 
 export function SemanticStagePage() {
@@ -501,7 +502,7 @@ export function SemanticStagePage() {
               {semanticRules.length === 0 && !semanticRulesQuery.isLoading ? (
                 <div className="p-4"><EmptyState title="No semantic rules yet" description="Run semantic maker from the documents page." /></div>
               ) : (
-                <StickyScrollX>
+                <div className="overflow-x-auto">
                   <table className="w-full min-w-[1780px] border-collapse text-left text-sm">
                     <thead className="bg-[#f8fafc] text-xs uppercase text-[#667085]">
                       <tr>
@@ -588,8 +589,21 @@ export function SemanticStagePage() {
                       })}
                     </tbody>
                   </table>
-                </StickyScrollX>
+                </div>
               )}
+            </Panel>
+          </div>
+        ) : null}
+
+        {/* ===== Job History Tab ===== */}
+        {activeTab === 'history' ? (
+          <div className="space-y-4 p-4">
+            <Panel>
+              <PanelHeader
+                title="All Semantic Jobs"
+                description={`${jobs.filter((j) => semanticJobTypes.includes(j.jobType)).length} job${jobs.filter((j) => semanticJobTypes.includes(j.jobType)).length !== 1 ? 's' : ''} total`}
+              />
+              <JobHistoryTable jobs={jobs} jobTypes={semanticJobTypes} />
             </Panel>
           </div>
         ) : null}
@@ -844,5 +858,199 @@ function CheckerSummary({ title, run }: { title: string; run?: CheckerRun | null
       <p className="mt-3 text-xs text-[#667085]">{run.model || 'model unknown'} - {formatDate(run.checkedAt)}</p>
       {run.calcSummaryJson ? <JsonViewButton title="Checker JSON" value={run.calcSummaryJson} label="View JSON" /> : null}
     </div>
+  )
+}
+
+function JobHistoryTable({ jobs, jobTypes }: { jobs: AsyncJob[]; jobTypes: string[] }) {
+  const [compareJob, setCompareJob] = useState<AsyncJob | null>(null)
+
+  const stageJobs = jobs
+    .filter((j) => jobTypes.includes(j.jobType))
+    .sort((a, b) => {
+      const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0
+      const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0
+      return tb - ta // newest first
+    })
+
+  if (stageJobs.length === 0) {
+    return (
+      <div className="p-4">
+        <EmptyState title="No jobs yet" description="Jobs will appear here once you run maker, checker, or review operations." />
+      </div>
+    )
+  }
+
+  return (
+    <>
+      <StickyScrollX>
+        <table className="w-full min-w-[1000px] border-collapse text-left text-sm">
+          <thead className="bg-[#f8fafc] text-xs uppercase text-[#667085]">
+            <tr>
+              <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">#</th>
+              <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Job Type</th>
+              <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Status</th>
+              <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Job ID</th>
+              <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Triggered By</th>
+              <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Created</th>
+              <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Error</th>
+              <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Result</th>
+            </tr>
+          </thead>
+          <tbody>
+            {stageJobs.map((job, index) => {
+              const isEdit = job.jobType === 'SEMANTIC_EDIT' || job.jobType === 'SEMANTIC_REWRITE'
+              return (
+                <tr key={job.id} className="border-b border-[#edf1f6] align-top last:border-0">
+                  <td className="px-4 py-3 text-[#667085]">{stageJobs.length - index}</td>
+                  <td className="px-4 py-3">
+                    <JobTypePill jobType={job.jobType} />
+                  </td>
+                  <td className="px-4 py-3"><StatusPill value={job.status} /></td>
+                  <td className="px-4 py-3">
+                    <span className="font-mono text-xs text-[#667085]">{job.id}</span>
+                  </td>
+                  <td className="px-4 py-3">
+                    {job.triggeredByJobId ? (
+                      <span className="font-mono text-xs text-[#175cd3]">{job.triggeredByJobId}</span>
+                    ) : (
+                      <span className="text-xs text-[#98a2b3]">manual</span>
+                    )}
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3 text-[#667085]">{formatDate(job.createdAt)}</td>
+                  <td className="max-w-xs px-4 py-3 text-xs text-[#b42318]">{job.errorMessage || '-'}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex gap-2">
+                      <JsonViewButton title={`${job.jobType} Result`} value={job.resultPayload} />
+                      {isEdit && job.status === 'SUCCEEDED' ? (
+                        <Button size="sm" onClick={() => setCompareJob(job)}>Compare</Button>
+                      ) : null}
+                    </div>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </StickyScrollX>
+      {compareJob ? (
+        <SemanticVersionCompareDrawer job={compareJob} onClose={() => setCompareJob(null)} />
+      ) : null}
+    </>
+  )
+}
+
+function SemanticVersionCompareDrawer({ job, onClose }: { job: AsyncJob; onClose: () => void }) {
+  const payload = parseJsonText(job.resultPayload) as Record<string, unknown> | null
+  const oldRuleId = payload?.oldSemanticRuleId as string | undefined
+  const newRuleId = payload?.newSemanticRuleId as string | undefined
+  const ruleCode = payload?.semanticRuleCode as string | undefined
+  const oldVersion = payload?.oldVersion as number | undefined
+  const newVersion = payload?.newVersion as number | undefined
+
+  const oldRuleQuery = useQuery({
+    queryKey: ['semantic-rule', oldRuleId],
+    queryFn: () => semanticRulesApi.get(oldRuleId!),
+    enabled: Boolean(oldRuleId),
+  })
+  const newRuleQuery = useQuery({
+    queryKey: ['semantic-rule', newRuleId],
+    queryFn: () => semanticRulesApi.get(newRuleId!),
+    enabled: Boolean(newRuleId),
+  })
+
+  const oldJson = oldRuleQuery.data?.llmOutputJson
+  const newJson = newRuleQuery.data?.llmOutputJson
+  const isLoading = oldRuleQuery.isLoading || newRuleQuery.isLoading
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-[#101828]/35 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative mx-4 flex h-[calc(100vh-2rem)] w-full max-w-[calc(100vw-2rem)] flex-col rounded-lg border border-[#c8d0dc] bg-white shadow-2xl my-4">
+        <div className="flex items-center justify-between border-b border-[#e3e8f0] bg-[#f8fafc] px-5 py-3">
+          <div className="flex items-center gap-2.5">
+            <span className="rounded bg-[#6d28d9] px-2 py-0.5 text-xs font-medium text-white">DIFF</span>
+            <h2 className="text-sm font-semibold text-[#172033]">
+              {ruleCode || 'Rule'} &mdash; v{oldVersion ?? '?'} &rarr; v{newVersion ?? '?'}
+            </h2>
+          </div>
+          <Button size="sm" onClick={onClose}>Close</Button>
+        </div>
+        <div className="flex-1 overflow-auto p-4">
+          {isLoading ? (
+            <p className="text-sm text-[#667085]">Loading versions...</p>
+          ) : !oldJson && !newJson ? (
+            <p className="text-sm text-[#667085]">No JSON data available for comparison.</p>
+          ) : (
+            <DiffView oldJson={oldJson} newJson={newJson} oldLabel={`v${oldVersion ?? '?'}`} newLabel={`v${newVersion ?? '?'}`} />
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function DiffView({ oldJson, newJson, oldLabel, newLabel }: { oldJson?: string | null; newJson?: string | null; oldLabel: string; newLabel: string }) {
+  const oldParsed = parseJsonText(oldJson)
+  const newParsed = parseJsonText(newJson)
+  const oldFormatted = typeof oldParsed === 'string' ? oldParsed : JSON.stringify(oldParsed, null, 2) || ''
+  const newFormatted = typeof newParsed === 'string' ? newParsed : JSON.stringify(newParsed, null, 2) || ''
+  const oldLines = oldFormatted.split('\n')
+  const newLines = newFormatted.split('\n')
+
+  // Simple line-level diff: mark lines that differ
+  const maxLen = Math.max(oldLines.length, newLines.length)
+
+  return (
+    <div className="grid grid-cols-2 gap-3">
+      <div>
+        <p className="mb-2 text-xs font-semibold uppercase text-[#b42318]">{oldLabel} (Before)</p>
+        <pre className="max-h-[70vh] overflow-auto rounded-md border border-[#e3e8f0] bg-white p-3 text-xs leading-5 text-[#24292f]">
+          {Array.from({ length: maxLen }, (_, i) => {
+            const line = oldLines[i] ?? ''
+            const changed = line !== (newLines[i] ?? '')
+            return (
+              <div key={i} className={changed ? 'bg-[#fff1f0] text-[#b42318]' : ''}>
+                <span className="mr-3 inline-block w-6 text-right text-[#98a2b3] select-none">{i + 1}</span>
+                {line}
+              </div>
+            )
+          })}
+        </pre>
+      </div>
+      <div>
+        <p className="mb-2 text-xs font-semibold uppercase text-[#079455]">{newLabel} (After)</p>
+        <pre className="max-h-[70vh] overflow-auto rounded-md border border-[#e3e8f0] bg-white p-3 text-xs leading-5 text-[#24292f]">
+          {Array.from({ length: maxLen }, (_, i) => {
+            const line = newLines[i] ?? ''
+            const changed = line !== (oldLines[i] ?? '')
+            return (
+              <div key={i} className={changed ? 'bg-[#ecfdf3] text-[#067647]' : ''}>
+                <span className="mr-3 inline-block w-6 text-right text-[#98a2b3] select-none">{i + 1}</span>
+                {line}
+              </div>
+            )
+          })}
+        </pre>
+      </div>
+    </div>
+  )
+}
+
+function JobTypePill({ jobType }: { jobType: string }) {
+  const colors: Record<string, string> = {
+    SEMANTIC_MAKER: 'border-[#b8ccf0] bg-[#eff6ff] text-[#175cd3]',
+    SEMANTIC_CHECKER: 'border-[#f5c97a] bg-[#fffbeb] text-[#b54708]',
+    SEMANTIC_REWRITE: 'border-[#c4b5fd] bg-[#f5f3ff] text-[#6d28d9]',
+    SEMANTIC_EDIT: 'border-[#99f6e4] bg-[#f0fdfa] text-[#0f766e]',
+    ATOMIC_MAKER: 'border-[#b8ccf0] bg-[#eff6ff] text-[#175cd3]',
+    ATOMIC_CHECKER: 'border-[#f5c97a] bg-[#fffbeb] text-[#b54708]',
+    ATOMIC_REWRITE: 'border-[#c4b5fd] bg-[#f5f3ff] text-[#6d28d9]',
+    EDIT: 'border-[#99f6e4] bg-[#f0fdfa] text-[#0f766e]',
+  }
+  const label = jobType.replaceAll('_', ' ')
+  return (
+    <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium ${colors[jobType] || 'border-[#d8dee8] bg-[#f8fafc] text-[#475467]'}`}>
+      {label}
+    </span>
   )
 }
