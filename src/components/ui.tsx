@@ -217,15 +217,17 @@ export function Label({ label, children }: { label: string; children: ReactNode 
 export function StatusPill({ value }: { value?: string | null }) {
   const normalized = value || 'UNKNOWN'
   const style =
-    normalized === 'SUCCEEDED' || normalized === 'COMPLETED' || normalized === 'APPROVED' || normalized === 'PASSED'
+    normalized === 'SUCCEEDED' || normalized === 'COMPLETED' || normalized === 'APPROVED' || normalized === 'PASSED' || normalized === 'Transformed'
       ? 'border-[#9bd4b5] bg-[#ecfdf3] text-[#067647]'
-      : normalized === 'FAILED' || normalized === 'REJECTED' || normalized === 'BLOCKED'
+      : normalized === 'FAILED' || normalized === 'REJECTED' || normalized === 'BLOCKED' || normalized === 'ERROR' || normalized === 'Transform Failed'
         ? 'border-[#f7b4ae] bg-[#fff1f0] text-[#b42318]'
-        : normalized === 'PARTIAL_SUCCESS'
+        : normalized === 'PARTIAL_SUCCESS' || normalized === 'WARNED'
           ? 'border-[#f5c97a] bg-[#fffbeb] text-[#b54708]'
-          : normalized === 'RUNNING' || normalized === 'PROCESSING' || normalized === 'QUEUED' || normalized === 'DRAFT'
+          : normalized === 'RUNNING' || normalized === 'PROCESSING' || normalized === 'QUEUED' || normalized === 'DRAFT' || normalized === 'Transforming'
             ? 'border-[#b8ccf0] bg-[#eff6ff] text-[#175cd3]'
-            : 'border-[#d8dee8] bg-[#f8fafc] text-[#475467]'
+            : normalized === 'Uploaded'
+              ? 'border-[#d8c4f7] bg-[#f5f0ff] text-[#6b21a8]'
+              : 'border-[#d8dee8] bg-[#f8fafc] text-[#475467]'
   return <span className={cn('inline-flex rounded-full border px-2 py-0.5 text-xs font-medium', style)}>{normalized}</span>
 }
 
@@ -330,7 +332,7 @@ export function JsonDrawer({
   )
 }
 
-function colorizeJson(json: string): string {
+export function colorizeJson(json: string): string {
   return json
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     // field names: "key":  →  brown/maroon

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Play, RefreshCw } from 'lucide-react'
+import { ArrowUpCircle, Play, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { documentsApi, getErrorMessage, semanticMakerApi, workflowsApi } from '../api'
 import { usePolledJob } from '../hooks'
@@ -29,7 +29,7 @@ export function WorkflowsPage() {
 
   const workflowsQuery = useQuery({
     queryKey: ['workflows', documentFilter],
-    queryFn: () => workflowsApi.list(documentFilter || undefined, true),
+    queryFn: () => workflowsApi.list(documentFilter || undefined, false),
     refetchInterval: 5000,
   })
 
@@ -58,6 +58,15 @@ export function WorkflowsPage() {
     onSuccess: (response) => {
       toast.success('Semantic maker job queued')
       setActiveJobId(response.jobId)
+    },
+    onError: (error) => toast.error(getErrorMessage(error)),
+  })
+
+  const activateWorkflowMutation = useMutation({
+    mutationFn: (workflowId: string) => workflowsApi.activate(workflowId),
+    onSuccess: (data) => {
+      toast.success(`Workflow ${data.id} is now active`)
+      void queryClient.invalidateQueries({ queryKey: ['workflows'] })
     },
     onError: (error) => toast.error(getErrorMessage(error)),
   })
@@ -136,7 +145,7 @@ export function WorkflowsPage() {
       </Panel>
 
       <Panel>
-        <PanelHeader title="Active Workflows" description={`${workflows.length} workflow${workflows.length === 1 ? '' : 's'}`} />
+        <PanelHeader title="Workflows" description={`${workflows.length} workflow${workflows.length === 1 ? '' : 's'}`} />
         {workflowsQuery.isError ? <div className="p-4"><ErrorNotice message={getErrorMessage(workflowsQuery.error)} /></div> : null}
         {workflows.length === 0 && !workflowsQuery.isLoading ? (
           <div className="p-4">
@@ -149,7 +158,7 @@ export function WorkflowsPage() {
                 <tr>
                   <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Workflow</th>
                   <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Status</th>
-                  <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Maker Skill</th>
+                  <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Stage</th>
                   <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Created</th>
                   <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Actions</th>
                 </tr>
@@ -162,21 +171,31 @@ export function WorkflowsPage() {
                       <p className="text-xs text-[#667085]">Document {workflow.documentId}</p>
                     </td>
                     <td className="px-4 py-3"><StatusPill value={workflow.status} /></td>
-                    <td className="px-4 py-3 text-[#475467]">
-                      {workflow.atomicMakerSkill?.displayName || workflow.atomicMakerSkill?.name || '-'}
-                    </td>
+                    <td className="px-4 py-3"><StatusPill value={workflow.currentStage || 'New'} /></td>
                     <td className="px-4 py-3 text-[#475467]">{formatDate(workflow.createdAt)}</td>
                     <td className="px-4 py-3">
-                      <Link
-                        className="inline-flex h-8 items-center justify-center rounded-md border border-[#1f6feb] bg-[#1f6feb] px-3 text-xs font-medium text-white hover:bg-[#1a5fca]"
-                        to={`/workflows/${encodeURIComponent(workflow.id)}/semantic`}
-                        onClick={() => {
-                          setWorkflowId(workflow.id)
-                          setDocumentId(workflow.documentId)
-                        }}
-                      >
-                        Open
-                      </Link>
+                      <div className="flex gap-2">
+                        <Link
+                          className="inline-flex h-8 items-center justify-center rounded-md border border-[#1f6feb] bg-[#1f6feb] px-3 text-xs font-medium text-white hover:bg-[#1a5fca]"
+                          to={`/workflows/${encodeURIComponent(workflow.id)}/semantic`}
+                          onClick={() => {
+                            setWorkflowId(workflow.id)
+                            setDocumentId(workflow.documentId)
+                          }}
+                        >
+                          Open
+                        </Link>
+                        {workflow.status !== 'ACTIVE' ? (
+                          <Button
+                            size="sm"
+                            onClick={() => activateWorkflowMutation.mutate(workflow.id)}
+                            disabled={activateWorkflowMutation.isPending}
+                          >
+                            <ArrowUpCircle className="h-3.5 w-3.5" aria-hidden="true" />
+                            Activate
+                          </Button>
+                        ) : null}
+                      </div>
                     </td>
                   </tr>
                 ))}

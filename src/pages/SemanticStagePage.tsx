@@ -23,6 +23,7 @@ import {
   jobsApi,
   parseJsonText,
   semanticCheckerApi,
+  semanticMakerApi,
   semanticRulesApi,
   workflowsApi,
   type AsyncJob,
@@ -141,16 +142,25 @@ export function SemanticStagePage() {
   useEffect(() => {
     const job = jobQuery.data
     if (!job) return
-    if (job.status === 'SUCCEEDED') {
-      toast.success(semanticJobSuccessMessage(job.jobType))
+    if (job.status === 'SUCCEEDED' || job.status === 'PARTIAL_SUCCESS') {
+      if (job.status === 'PARTIAL_SUCCESS') {
+        toast.warning(`${semanticJobSuccessMessage(job.jobType)} (partial success)`)
+      } else {
+        toast.success(semanticJobSuccessMessage(job.jobType))
+      }
       window.setTimeout(() => setActiveJobId(null), 0)
       void queryClient.invalidateQueries()
+      // Re-run maker creates a new workflow — navigate to it
+      if (job.jobType === 'SEMANTIC_MAKER' && job.workflowId && job.workflowId !== workflowId) {
+        setWorkflowId(job.workflowId)
+        navigate(`/workflows/${encodeURIComponent(job.workflowId)}/semantic`)
+      }
     }
     if (job.status === 'FAILED') {
       toast.error(job.errorMessage || semanticJobFailureMessage(job.jobType))
       window.setTimeout(() => setActiveJobId(null), 0)
     }
-  }, [jobQuery.data, queryClient])
+  }, [jobQuery.data, queryClient, navigate, workflowId, setWorkflowId])
 
   const startJobMutation = useMutation({
     mutationFn: async (action: SemanticJobAction) => {
@@ -223,6 +233,18 @@ export function SemanticStagePage() {
       }
     },
     onError: () => toast.error('Failed to check approval status.'),
+  })
+
+  const documentId = workflowQuery.data?.documentId || ''
+
+  const reRunMakerMutation = useMutation({
+    mutationFn: () => semanticMakerApi.extract(documentId, reviewerId || 'reviewer-poc', true),
+    onSuccess: (response) => {
+      setActiveJobId(response.jobId)
+      toast.success('Semantic maker re-run job queued')
+      void queryClient.invalidateQueries({ queryKey: ['workflow-jobs', workflowId] })
+    },
+    onError: (error) => toast.error(getErrorMessage(error)),
   })
 
   const rewriteSemanticMutation = useMutation({
@@ -481,6 +503,13 @@ export function SemanticStagePage() {
                 description={`${approvedSemanticCount}/${semanticRules.length} approved`}
                 actions={
                   <>
+                    <Button
+                      onClick={() => reRunMakerMutation.mutate()}
+                      disabled={reRunMakerMutation.isPending || Boolean(activeJobId) || !documentId}
+                    >
+                      <RefreshCw className="h-4 w-4" aria-hidden="true" />
+                      Re-run Maker
+                    </Button>
                     <Button
                       onClick={() => approveAllMutation.mutate()}
                       disabled={approveAllMutation.isPending || semanticRules.length === 0 || allSemanticRulesApproved}

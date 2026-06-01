@@ -14,6 +14,7 @@ export type DocumentRecord = {
   structuredMarkdown?: string | null
   transformModelVersion?: string | null
   transformTimestamp?: string | null
+  errorMessage?: string | null
   createdAt?: string | null
   updatedAt?: string | null
 }
@@ -69,6 +70,7 @@ export type WorkflowRecord = {
   documentId: string
   triggeredBy?: string | null
   status: string
+  currentStage?: string | null
   atomicMakerSkill?: SkillSummary | null
   checkerSkill?: SkillSummary | null
   createdAt?: string | null
@@ -373,6 +375,8 @@ export const workflowsApi = {
     fromResponse<WorkflowRecord>(http.get(atomicPath(`/workflows/${encodeURIComponent(workflowId)}`))),
   history: (workflowId: string) =>
     fromResponse<ChangeHistoryItem[]>(http.get(atomicPath(`/workflows/${encodeURIComponent(workflowId)}/change-history`))),
+  activate: (workflowId: string) =>
+    fromResponse<WorkflowRecord>(http.post(atomicPath(`/workflows/${encodeURIComponent(workflowId)}/activate`))),
 }
 
 export const semanticMakerApi = {
@@ -477,6 +481,10 @@ export const atomicCheckerApi = {
   run: (workflowId: string) => fromResponse<JobResponse>(http.post(atomicPath(`/checker/workflow/${encodeURIComponent(workflowId)}`))),
   latestRun: (workflowId: string) =>
     optionalFromResponse<CheckerRun>(http.get(atomicPath(`/checker/workflow/${encodeURIComponent(workflowId)}/latest-run`))),
+  allRuns: (workflowId: string) =>
+    fromResponse<CheckerRun[]>(http.get(atomicPath(`/checker/workflow/${encodeURIComponent(workflowId)}/runs`))),
+  runsByJob: (jobId: string) =>
+    fromResponse<CheckerRun[]>(http.get(atomicPath(`/checker/jobs/${encodeURIComponent(jobId)}/runs`))),
   latestResults: (workflowId: string) =>
     fromResponse<AtomicCheckerResult[]>(http.get(atomicPath(`/checker/workflow/${encodeURIComponent(workflowId)}/latest-results`))),
   latestResultByRule: (ruleId: string) =>
@@ -485,6 +493,7 @@ export const atomicCheckerApi = {
 
 export const rewriteApi = {
   group: (payload: {
+    atomicRuleId: string
     semanticRuleId: string
     workflowId: string
     rewriteMode: 'CHECKER_FEEDBACK' | 'HUMAN_FEEDBACK'
@@ -518,7 +527,7 @@ export function isJobRunning(status?: string | null) {
 }
 
 export function isJobDone(status?: string | null) {
-  return status === 'SUCCEEDED' || status === 'FAILED'
+  return status === 'SUCCEEDED' || status === 'FAILED' || status === 'PARTIAL_SUCCESS'
 }
 
 export function getErrorMessage(error: unknown) {

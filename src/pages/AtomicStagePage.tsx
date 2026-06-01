@@ -2,7 +2,9 @@ import { type ReactNode, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  AlertTriangle,
   CheckCircle2,
+  Columns,
   Edit3,
   Eye,
   History,
@@ -11,6 +13,7 @@ import {
   RefreshCw,
   RotateCcw,
   ShieldCheck,
+  XCircle,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -30,7 +33,6 @@ import {
   type AsyncJob,
   type AtomicRule,
   type CheckerRun,
-  type ExtractionGroup,
   type JsonRecord,
   type SemanticRule,
 } from '../api'
@@ -38,6 +40,7 @@ import { JobSummaryCard, WorkflowStageJobs } from '../components/WorkflowStageJo
 import { WorkflowStagePipeline } from '../components/WorkflowStagePipeline'
 import {
   Button,
+  colorizeJson,
   EmptyState,
   ErrorNotice,
   JsonViewButton,
@@ -82,6 +85,7 @@ export function AtomicStagePage() {
   const [humanFeedback, setHumanFeedback] = useState('')
   const [editRule, setEditRule] = useState<AtomicRule | null>(null)
   const [editText, setEditText] = useState('')
+  const [consolidatedRule, setConsolidatedRule] = useState<{ rule: AtomicRule; checkerJson?: string | null } | null>(null)
   const atomicRulesQueryKey = ['atomic-rules', workflowId] as const
 
   useEffect(() => {
@@ -160,6 +164,11 @@ export function AtomicStagePage() {
       window.setTimeout(() => setActiveJobId(null), 0)
       void queryClient.invalidateQueries()
     }
+    if (job.status === 'PARTIAL_SUCCESS') {
+      toast.warning(`${formatJobType(job.jobType)} completed with partial success`)
+      window.setTimeout(() => setActiveJobId(null), 0)
+      void queryClient.invalidateQueries()
+    }
     if (job.status === 'FAILED') {
       toast.error(job.errorMessage || `${formatJobType(job.jobType)} failed`)
       window.setTimeout(() => setActiveJobId(null), 0)
@@ -190,14 +199,16 @@ export function AtomicStagePage() {
 
   const rewriteGroupMutation = useMutation({
     mutationFn: ({
+      atomicRuleId,
       semanticRuleId,
       rewriteMode,
       humanFeedback,
     }: {
+      atomicRuleId: string
       semanticRuleId: string
       rewriteMode: AtomicRewriteMode
       humanFeedback?: string
-    }) => rewriteApi.group({ semanticRuleId, workflowId, rewriteMode, humanFeedback }),
+    }) => rewriteApi.group({ atomicRuleId, semanticRuleId, workflowId, rewriteMode, humanFeedback }),
     onSuccess: (response) => {
       setActiveJobId(response.jobId)
       setHumanRewriteRule(null)
@@ -425,8 +436,9 @@ export function AtomicStagePage() {
                   </Button>
                 }
               />
-              <div className="p-4">
+              <div className="p-4 space-y-4">
                 <CheckerSummary title="Latest Checker Run" run={atomicRunQuery.data} />
+                <CheckerGroupBreakdown jobs={jobs} />
               </div>
             </Panel>
 
@@ -443,52 +455,57 @@ export function AtomicStagePage() {
               ) : (
                 <StickyScrollX>
                   <table className="w-full min-w-[1200px] border-collapse text-left text-sm">
-                    <thead className="bg-[#f8fafc] text-xs uppercase text-[#667085]">
-                      <tr>
-                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Rule</th>
-                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Checker Result</th>
-                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Blocking</th>
-                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Quality</th>
-                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Checker Job</th>
-                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Maker Job</th>
-                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Checked At</th>
-                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Details</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {atomicResults.map((result) => {
-                        const atomicRule = atomicRules.find((r) => r.id === result.targetRuleId)
-                        // Find the checker job to get its triggeredByJobId (maker lineage)
-                        const checkerJob = jobs.find((j) => j.id === result.checkerJobId)
-                        const makerJobId = checkerJob?.latestMakerJobId
-                        return (
-                          <tr key={result.id} className="border-b border-[#edf1f6] align-top last:border-0">
-                            <td className="px-4 py-3 font-medium text-[#172033]">
-                              {atomicRule ? getAtomicRuleCode(atomicRule) : result.targetRuleId}
-                            </td>
-                            <td className="px-4 py-3"><StatusPill value={result.llmIsPassing} /></td>
-                            <td className="px-4 py-3 text-[#667085]">{result.calcBlockingCategory || '-'}</td>
-                            <td className="px-4 py-3 text-[#667085]">{result.calcQualityScore || '-'}</td>
-                            <td className="px-4 py-3">
-                              <span className="font-mono text-xs text-[#667085]">{result.checkerJobId}</span>
-                            </td>
-                            <td className="px-4 py-3">
-                              {makerJobId ? (
-                                <span className="font-mono text-xs text-[#175cd3]">{makerJobId}</span>
-                              ) : (
-                                <span className="text-xs text-[#98a2b3]">-</span>
-                              )}
-                            </td>
-                            <td className="px-4 py-3 text-[#667085]">{formatDate(result.checkedAt)}</td>
-                            <td className="px-4 py-3">
-                              <JsonViewButton
-                                title="Checker Findings"
-                                value={result.llmReviewEntry || result.llmFindings}
-                              />
-                            </td>
-                          </tr>
-                        )
-                      })}
+                      <thead className="bg-[#f8fafc] text-xs uppercase text-[#667085]">
+                       <tr>
+                         <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Semantic Rule</th>
+                         <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Atomic Rule</th>
+                         <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Checker Result</th>
+                         <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Blocking</th>
+                         <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Quality</th>
+                         <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Checked At</th>
+                         <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Details</th>
+                       </tr>
+                     </thead>
+                     <tbody>
+                       {atomicResults.map((result) => {
+                         const atomicRule = atomicRules.find((r) => r.id === result.targetRuleId)
+                         const parent = atomicRule ? findParentSemanticRule(atomicRule, semanticRules) : null
+                         return (
+                           <tr key={result.id} className="border-b border-[#edf1f6] align-top last:border-0">
+                             <td className="px-4 py-3 text-[#475467]">
+                               {parent ? (
+                                 <Link
+                                   className="font-medium text-[#175cd3] hover:underline"
+                                   to={`/workflows/${encodeURIComponent(workflowId)}/semantic/${encodeURIComponent(parent.id)}`}
+                                 >
+                                   {getSemanticRuleCode(parent)}
+                                 </Link>
+                               ) : (
+                                 atomicRule ? getAtomicRuleSemanticCode(atomicRule) : '-'
+                               )}
+                             </td>
+                             <td className="px-4 py-3 font-medium text-[#172033]">
+                               {atomicRule ? getAtomicRuleCode(atomicRule) : result.targetRuleId}
+                             </td>
+                             <td className="px-4 py-3"><StatusPill value={result.llmIsPassing} /></td>
+                             <td className="px-4 py-3 text-[#667085]">{result.calcBlockingCategory || '-'}</td>
+                             <td className="px-4 py-3 text-[#667085]">
+                               {(() => {
+                                 const qs = parseJsonText(result.calcQualityScore) as Record<string, unknown> | null
+                                 const v = typeof qs?.value === 'number' ? qs.value : null
+                                 return v != null ? <span className="font-medium">{(v * 100).toFixed(1)}%</span> : '-'
+                               })()}
+                             </td>
+                             <td className="px-4 py-3 text-[#667085]">{formatDate(result.checkedAt)}</td>
+                             <td className="px-4 py-3">
+                               <JsonViewButton
+                                 title="Checker Findings"
+                                 value={result.llmReviewEntry || result.llmFindings}
+                               />
+                             </td>
+                           </tr>
+                         )
+                       })}
                     </tbody>
                   </table>
                 </StickyScrollX>
@@ -522,7 +539,7 @@ export function AtomicStagePage() {
                 <div className="p-4"><EmptyState title="No atomic rules yet" description="Approve semantic rules, then run atomic maker." /></div>
               ) : (
                 <StickyScrollX>
-                  <table className="w-full min-w-[1780px] border-collapse text-left text-sm">
+                  <table className="w-full min-w-[1900px] border-collapse text-left text-sm">
                     <thead className="bg-[#f8fafc] text-xs uppercase text-[#667085]">
                       <tr>
                         <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Rule</th>
@@ -532,6 +549,7 @@ export function AtomicStagePage() {
                         <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Summary</th>
                         <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Atomic JSON</th>
                         <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Checker JSON</th>
+                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Consolidated</th>
                         <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Actions</th>
                       </tr>
                     </thead>
@@ -572,6 +590,18 @@ export function AtomicStagePage() {
                             <td className="w-[100px] px-4 py-3">
                               <JsonViewButton title={`${getAtomicRuleCode(rule)} Checker`} value={result?.llmReviewEntry || result?.llmFindings} />
                             </td>
+                            <td className="w-[100px] px-4 py-3">
+                              <Button
+                                size="sm"
+                                onClick={() => setConsolidatedRule({
+                                  rule,
+                                  checkerJson: result?.llmReviewEntry || result?.llmFindings,
+                                })}
+                              >
+                                <Columns className="h-3.5 w-3.5" aria-hidden="true" />
+                                View
+                              </Button>
+                            </td>
                             <td className="px-4 py-3">
                               <div className="flex flex-wrap gap-2">
                                 <Button
@@ -589,6 +619,7 @@ export function AtomicStagePage() {
                                   onClick={() => {
                                     if (!parent) return
                                     rewriteGroupMutation.mutate({
+                                      atomicRuleId: rule.id,
                                       semanticRuleId: parent.id,
                                       rewriteMode: 'CHECKER_FEEDBACK',
                                     })
@@ -652,8 +683,9 @@ export function AtomicStagePage() {
             className="space-y-4"
             onSubmit={(event) => {
               event.preventDefault()
-              if (!humanRewriteParent) return
+              if (!humanRewriteParent || !humanRewriteRule) return
               rewriteGroupMutation.mutate({
+                atomicRuleId: humanRewriteRule.id,
                 semanticRuleId: humanRewriteParent.id,
                 rewriteMode: 'HUMAN_FEEDBACK',
                 humanFeedback,
@@ -718,6 +750,15 @@ export function AtomicStagePage() {
             </div>
           </form>
         </AtomicDialog>
+      ) : null}
+
+      {consolidatedRule ? (
+        <ConsolidatedViewDrawer
+          ruleCode={getAtomicRuleCode(consolidatedRule.rule)}
+          atomicJson={consolidatedRule.rule.llmOutputJson || consolidatedRule.rule.content}
+          checkerJson={consolidatedRule.checkerJson}
+          onClose={() => setConsolidatedRule(null)}
+        />
       ) : null}
     </div>
   )
@@ -896,6 +937,118 @@ function CheckerSummary({ title, run }: { title: string; run?: CheckerRun | null
 
       <p className="mt-3 text-xs text-[#667085]">{run.model || 'model unknown'} - {formatDate(run.checkedAt)}</p>
       {run.calcSummaryJson ? <JsonViewButton title="Checker JSON" value={run.calcSummaryJson} label="View JSON" /> : null}
+    </div>
+  )
+}
+
+type GroupDetail = {
+  semanticRuleCode: string
+  semanticRuleTitle?: string | null
+  atomicRuleCount: number
+  status: string
+  governanceGate: string
+  errorMessage?: string | null
+  atomicReviewCount?: number | null
+  overallQualityScore?: number | null
+}
+
+function CheckerGroupBreakdown({ jobs }: { jobs: AsyncJob[] }) {
+  // Find the latest ATOMIC_CHECKER job with a resultPayload
+  const latestCheckerJob = jobs
+    .filter((j) => j.jobType === 'ATOMIC_CHECKER' && j.resultPayload)
+    .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+    [0]
+
+  if (!latestCheckerJob?.resultPayload) return null
+
+  const payload = parseJsonText(latestCheckerJob.resultPayload) as Record<string, unknown> | null
+  if (!payload?.scoped) return null
+
+  const groupDetails = (payload.group_details || []) as GroupDetail[]
+  const totalGroups = typeof payload.total_groups === 'number' ? payload.total_groups : groupDetails.length
+  const failedGroups = typeof payload.failed_groups === 'number' ? payload.failed_groups : 0
+  const succeededGroups = totalGroups - failedGroups
+
+  if (groupDetails.length === 0) return null
+
+  return (
+    <div className="rounded-md border border-[#d8dee8] bg-[#fbfcfe]">
+      <div className="flex items-center justify-between border-b border-[#e3e8f0] px-4 py-3">
+        <p className="text-sm font-semibold text-[#344054]">
+          Checker Group Breakdown
+        </p>
+        <div className="flex gap-2 text-xs">
+          <span className="rounded bg-[#f0f5ff] px-2 py-0.5 text-[#175cd3]">
+            {totalGroups} groups
+          </span>
+          <span className="rounded bg-[#ecfdf3] px-2 py-0.5 text-[#079455]">
+            {succeededGroups} succeeded
+          </span>
+          {failedGroups > 0 ? (
+            <span className="rounded bg-[#fef3f2] px-2 py-0.5 text-[#b42318]">
+              {failedGroups} failed
+            </span>
+          ) : null}
+        </div>
+      </div>
+      <table className="w-full border-collapse text-left text-sm">
+        <thead className="bg-[#f8fafc] text-xs uppercase text-[#667085]">
+          <tr>
+            <th className="border-b border-[#e3e8f0] px-4 py-2.5 font-semibold">Group</th>
+            <th className="border-b border-[#e3e8f0] px-4 py-2.5 font-semibold">Semantic Rule</th>
+            <th className="border-b border-[#e3e8f0] px-4 py-2.5 font-semibold">Atomic Rules</th>
+            <th className="border-b border-[#e3e8f0] px-4 py-2.5 font-semibold">Status</th>
+            <th className="border-b border-[#e3e8f0] px-4 py-2.5 font-semibold">Gate</th>
+            <th className="border-b border-[#e3e8f0] px-4 py-2.5 font-semibold">Quality</th>
+            <th className="border-b border-[#e3e8f0] px-4 py-2.5 font-semibold">Detail</th>
+          </tr>
+        </thead>
+        <tbody>
+          {groupDetails.map((group, i) => {
+            const isFailed = group.status === 'FAILED'
+            const rowBg = isFailed ? 'bg-[#fff8f7]' : ''
+            return (
+              <tr key={group.semanticRuleCode} className={cn('border-b border-[#edf1f6] last:border-0', rowBg)}>
+                <td className="px-4 py-2.5 text-xs text-[#667085]">#{i + 1}</td>
+                <td className="px-4 py-2.5">
+                  <div className="font-medium text-[#172033]">{group.semanticRuleCode}</div>
+                  {group.semanticRuleTitle ? (
+                    <div className="mt-0.5 text-xs text-[#667085] line-clamp-2">{group.semanticRuleTitle}</div>
+                  ) : null}
+                </td>
+                <td className="px-4 py-2.5 text-[#475467]">{group.atomicRuleCount}</td>
+                <td className="px-4 py-2.5">
+                  {isFailed ? (
+                    <span className="inline-flex items-center gap-1 text-[#b42318]">
+                      <XCircle className="h-3.5 w-3.5" />
+                      Failed
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-[#079455]">
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      Checked
+                    </span>
+                  )}
+                </td>
+                <td className="px-4 py-2.5">
+                  <StatusPill value={group.governanceGate} />
+                </td>
+                <td className="px-4 py-2.5 text-xs text-[#667085]">
+                  {group.overallQualityScore != null
+                    ? <span className="font-medium">{(group.overallQualityScore * 100).toFixed(1)}%</span>
+                    : '-'}
+                </td>
+                <td className="px-4 py-2.5">
+                  <JsonViewButton
+                    title={`Group #${i + 1} — ${group.semanticRuleCode}`}
+                    value={JSON.stringify(group, null, 2)}
+                  />
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
     </div>
   )
 }
@@ -1081,6 +1234,98 @@ function DiffView({ oldJson, newJson, oldLabel, newLabel }: { oldJson?: string |
             )
           })}
         </pre>
+      </div>
+    </div>
+  )
+}
+
+function ConsolidatedViewDrawer({
+  ruleCode,
+  atomicJson,
+  checkerJson,
+  onClose,
+}: {
+  ruleCode: string
+  atomicJson?: string | null
+  checkerJson?: string | null
+  onClose: () => void
+}) {
+  const monoFont = 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace'
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-[#101828]/35 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative mx-4 my-4 flex h-[calc(100vh-2rem)] w-full max-w-[calc(100vw-2rem)] flex-col rounded-lg border border-[#c8d0dc] bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-[#e3e8f0] bg-[#f8fafc] px-5 py-3">
+          <div className="flex items-center gap-2.5">
+            <span className="rounded bg-[#175cd3] px-2 py-0.5 text-xs font-medium text-white">CONSOLIDATED</span>
+            <h2 className="text-sm font-semibold text-[#172033]">{ruleCode}</h2>
+          </div>
+          <Button size="sm" onClick={onClose}>Close</Button>
+        </div>
+        <div className="grid flex-1 grid-cols-2 gap-0 overflow-hidden">
+          <ConsolidatedJsonPane
+            label="Atomic Rule"
+            labelColor="text-[#175cd3]"
+            badgeColor="bg-[#175cd3]"
+            json={atomicJson}
+            monoFont={monoFont}
+          />
+          <ConsolidatedJsonPane
+            label="Checker Review"
+            labelColor="text-[#b54708]"
+            badgeColor="bg-[#b54708]"
+            json={checkerJson}
+            monoFont={monoFont}
+            borderLeft
+          />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ConsolidatedJsonPane({
+  label,
+  labelColor,
+  badgeColor,
+  json,
+  monoFont,
+  borderLeft,
+}: {
+  label: string
+  labelColor: string
+  badgeColor: string
+  json?: string | null
+  monoFont: string
+  borderLeft?: boolean
+}) {
+  const parsed = parseJsonText(json)
+  const display = typeof parsed === 'string' ? parsed : JSON.stringify(parsed, null, 2) || ''
+  const lines = display ? display.split('\n') : []
+
+  return (
+    <div className={cn('flex flex-col overflow-hidden', borderLeft && 'border-l border-[#e3e8f0]')}>
+      <div className="flex items-center gap-2 border-b border-[#e3e8f0] bg-[#f8fafc] px-4 py-2">
+        <span className={cn('rounded px-2 py-0.5 text-xs font-medium text-white', badgeColor)}>{label}</span>
+        <span className={cn('text-xs font-semibold', labelColor)}>{lines.length} lines</span>
+      </div>
+      <div className="flex-1 overflow-auto bg-[#fafbfc]">
+        {lines.length === 0 ? (
+          <p className="p-4 text-sm text-[#98a2b3]">No data available</p>
+        ) : (
+          <pre className="flex min-h-full text-xs leading-6" style={{ fontFamily: monoFont }}>
+            <div className="sticky left-0 select-none border-r border-[#d8dee8] bg-[#f0f2f5] px-2 py-4 text-right text-[#8b949e]">
+              {lines.map((_, i) => (
+                <div key={i}>{i + 1}</div>
+              ))}
+            </div>
+            <div
+              className="flex-1 py-4 pl-4 pr-2 text-[#24292f] overflow-x-auto whitespace-pre"
+              dangerouslySetInnerHTML={{ __html: colorizeJson(display) }}
+            />
+          </pre>
+        )}
       </div>
     </div>
   )
