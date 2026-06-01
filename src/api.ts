@@ -39,6 +39,7 @@ export type JobResponse = {
 
 export type AsyncJob = {
   id: string
+  batchId?: string | null
   workflowId?: string | null
   documentId?: string | null
   jobType: string
@@ -121,6 +122,7 @@ export type AtomicRule = {
   llmSummary?: string | null
   llmSection?: string | null
   humanInterventionId?: string | null
+  makerJobId?: string | null
   createdAt?: string | null
   updatedAt?: string | null
 }
@@ -197,6 +199,123 @@ export type AtomicCheckerResult = {
   llmReviewEntry?: string | null
   checkedAt?: string | null
   model?: string | null
+}
+
+export type TestCaseGenerationBatch = {
+  id: string
+  sourceWorkflowId: string
+  sourceDocumentId?: string | null
+  sourceRulesSnapshot?: string | null
+  triggeredBy?: string | null
+  makerSkillId?: string | null
+  checkerSkillId?: string | null
+  status: string
+  createdAt?: string | null
+  updatedAt?: string | null
+}
+
+export type GeneratedTestCase = {
+  id: string
+  batchId: string
+  sourceAtomicRuleId: string
+  sourceAtomicRuleCode?: string | null
+  sourceSemanticRuleCode?: string | null
+  calcTestCaseCode?: string | null
+  llmTestCaseTitle?: string | null
+  llmObjective?: string | null
+  llmRuleUnderTest?: string | null
+  llmPreconditions?: string | null
+  llmTestSteps?: string | null
+  llmExpectedResult?: string | null
+  llmTestData?: string | null
+  llmVariants?: string | null
+  llmAssumptions?: string | null
+  llmTraceability?: string | null
+  llmPriority?: string | null
+  llmTestType?: string | null
+  llmOutputJson?: string | null
+  makerJobId?: string | null
+  testCaseVersion: number
+  isLatest: boolean
+  approvalStatus: string
+  createdAt?: string | null
+  updatedAt?: string | null
+}
+
+export type TestCaseCheckerRun = {
+  id: string
+  checkerJobId: string
+  batchId: string
+  checkScope?: string | null
+  sourceSemanticRuleCode?: string | null
+  targetTestCaseId?: string | null
+  llmHighLevelFeedback?: string | null
+  llmRunFindings?: string | null
+  llmRecommendations?: string | null
+  calcGovernanceGate?: string | null
+  calcSummaryJson?: string | null
+  calcGovernanceMetricsJson?: string | null
+  calcRecommendedAction?: string | null
+  rawOutputJson?: string | null
+  model?: string | null
+  checkedAt?: string | null
+}
+
+export type TestCaseCheckerResult = {
+  id: string
+  checkerRunId: string
+  checkerJobId: string
+  batchId: string
+  targetTestCaseId: string
+  sourceAtomicRuleId?: string | null
+  sourceAtomicRuleCode?: string | null
+  sourceSemanticRuleCode?: string | null
+  llmFindings?: string | null
+  llmDimensionReviews?: string | null
+  llmRecommendations?: string | null
+  llmReviewEntry?: string | null
+  calcIsPassing?: string | null
+  calcQualityScore?: string | null
+  calcBlockingCategory?: string | null
+  calcRecommendedAction?: string | null
+  model?: string | null
+  checkedAt?: string | null
+}
+
+export type TestCaseGenerationResponse = {
+  jobId: string
+  batchId: string
+  status: string
+}
+
+export type TestCaseJobResponse = {
+  id: string
+  batchId: string
+  jobType: string
+  status: string
+  inputPayload?: string | null
+  resultPayload?: string | null
+  errorMessage?: string | null
+  createdAt?: string | null
+  updatedAt?: string | null
+}
+
+export type TestCaseRewriteMode = 'CHECKER_FEEDBACK' | 'HUMAN_FEEDBACK'
+
+export type TestCaseEditPayload = {
+  editorId: string
+  title: string
+  objective: string
+  ruleUnderTest?: JsonRecord
+  preconditions?: string[]
+  testData?: JsonRecord
+  testSteps: Array<JsonRecord>
+  expectedResult: string
+  variants?: Array<JsonRecord>
+  priority: string
+  testType: string
+  assumptions?: string[]
+  traceability?: JsonRecord
 }
 
 export type Skill = {
@@ -320,10 +439,25 @@ const http = axios.create({
   },
 })
 
+const testCaseHttp = axios.create({
+  baseURL: '/testcase-api/v1',
+  headers: {
+    Accept: 'application/json',
+  },
+})
+
 const fromResponse = <T>(request: Promise<{ data: T }>) => request.then((response) => response.data)
 
 const optionalFromResponse = <T>(request: Promise<{ status: number; data: T }>) =>
   request.then((response) => (response.status === 204 ? null : response.data))
+
+const nullableFromResponse = <T>(request: Promise<{ status: number; data: T }>) =>
+  request
+    .then((response) => (response.status === 204 ? null : response.data))
+    .catch((error) => {
+      if (axios.isAxiosError(error) && error.response?.status === 404) return null
+      throw error
+    })
 
 const atomicPath = (path: string) => `/atomic-analysis${path}`
 const semanticPath = (path: string) => `/semantic-analysis${path}`
@@ -479,6 +613,10 @@ export const atomicRulesApi = {
     fromResponse<AtomicRule[]>(http.get(atomicPath(`/atomic-rules/${encodeURIComponent(atomicRuleCode)}/versions`), {
       params: { workflowId },
     })),
+  bulkApprove: (ruleIds: string[], approverId: string) =>
+    fromResponse<{ approved: number; total: number }>(
+      http.post(atomicPath('/atomic-rules/approve-bulk'), { ruleIds, approverId }),
+    ),
 }
 
 export const atomicCheckerApi = {
@@ -493,6 +631,106 @@ export const atomicCheckerApi = {
     fromResponse<AtomicCheckerResult[]>(http.get(atomicPath(`/checker/workflow/${encodeURIComponent(workflowId)}/latest-results`))),
   latestResultByRule: (ruleId: string) =>
     optionalFromResponse<AtomicCheckerResult>(http.get(atomicPath(`/checker/rules/${encodeURIComponent(ruleId)}/latest-result`))),
+}
+
+export const testCaseMakerApi = {
+  generate: (sourceWorkflowId: string, reviewerId: string, confirmReGenerate = false) =>
+    fromResponse<TestCaseGenerationResponse>(
+      testCaseHttp.post('/test-generation/maker/generate', {
+        sourceWorkflowId,
+        reviewerId,
+        confirmReGenerate,
+      }),
+    ),
+}
+
+export const testCaseBatchesApi = {
+  list: (sourceWorkflowId?: string) =>
+    fromResponse<TestCaseGenerationBatch[]>(
+      testCaseHttp.get('/test-generation/batches', {
+        params: { sourceWorkflowId: sourceWorkflowId || undefined },
+      }),
+    ),
+  get: (batchId: string) =>
+    fromResponse<TestCaseGenerationBatch>(testCaseHttp.get(`/test-generation/batches/${encodeURIComponent(batchId)}`)),
+  activate: (batchId: string) =>
+    fromResponse<TestCaseGenerationBatch>(
+      testCaseHttp.post(`/test-generation/batches/${encodeURIComponent(batchId)}/activate`),
+    ),
+}
+
+export const testCaseJobsApi = {
+  get: (jobId: string) => fromResponse<TestCaseJobResponse>(testCaseHttp.get(`/test-generation/jobs/${encodeURIComponent(jobId)}`)),
+  listByBatch: (batchId: string) =>
+    fromResponse<TestCaseJobResponse[]>(
+      testCaseHttp.get('/test-generation/jobs', {
+        params: { batchId },
+      }),
+    ),
+}
+
+export const testCasesApi = {
+  listLatest: () => fromResponse<GeneratedTestCase[]>(testCaseHttp.get('/test-generation/test-cases')),
+  byBatch: (batchId: string, latestOnly = true) =>
+    fromResponse<GeneratedTestCase[]>(
+      testCaseHttp.get(`/test-generation/batches/${encodeURIComponent(batchId)}/test-cases`, {
+        params: { latestOnly },
+      }),
+    ),
+  get: (testCaseId: string) =>
+    fromResponse<GeneratedTestCase>(testCaseHttp.get(`/test-generation/test-cases/${encodeURIComponent(testCaseId)}`)),
+  versions: (sourceAtomicRuleId: string, batchId: string) =>
+    fromResponse<GeneratedTestCase[]>(
+      testCaseHttp.get(`/test-generation/test-cases/${encodeURIComponent(sourceAtomicRuleId)}/versions`, {
+        params: { batchId },
+      }),
+    ),
+  approve: (testCaseId: string) =>
+    fromResponse<GeneratedTestCase>(testCaseHttp.post(`/test-generation/test-cases/${encodeURIComponent(testCaseId)}/approve`)),
+  reject: (testCaseId: string) =>
+    fromResponse<GeneratedTestCase>(testCaseHttp.post(`/test-generation/test-cases/${encodeURIComponent(testCaseId)}/reject`)),
+  reopen: (testCaseId: string) =>
+    fromResponse<GeneratedTestCase>(testCaseHttp.post(`/test-generation/test-cases/${encodeURIComponent(testCaseId)}/reopen`)),
+  editByHuman: (testCaseId: string, payload: TestCaseEditPayload) =>
+    fromResponse<GeneratedTestCase>(
+      testCaseHttp.post(`/test-generation/test-cases/${encodeURIComponent(testCaseId)}/edit-by-human`, payload),
+    ),
+  rewrite: (
+    testCaseId: string,
+    payload: { rewriteMode: TestCaseRewriteMode; humanFeedback?: string; requesterId?: string },
+  ) =>
+    fromResponse<{ jobId: string; status: string }>(
+      testCaseHttp.post(`/test-generation/test-cases/${encodeURIComponent(testCaseId)}/rewrite`, payload),
+    ),
+}
+
+export const testCaseCheckerApi = {
+  run: (batchId: string) =>
+    fromResponse<TestCaseJobResponse>(testCaseHttp.post(`/test-generation/checker/batch/${encodeURIComponent(batchId)}`)),
+  latestRun: (batchId: string) =>
+    nullableFromResponse<TestCaseCheckerRun>(
+      testCaseHttp.get(`/test-generation/checker/batch/${encodeURIComponent(batchId)}/latest-run`),
+    ),
+  runs: (batchId: string) =>
+    fromResponse<TestCaseCheckerRun[]>(
+      testCaseHttp.get(`/test-generation/checker/batch/${encodeURIComponent(batchId)}/runs`),
+    ),
+  resultsByBatch: (batchId: string) =>
+    fromResponse<TestCaseCheckerResult[]>(
+      testCaseHttp.get(`/test-generation/checker/batch/${encodeURIComponent(batchId)}/results`),
+    ),
+  resultsByTestCase: (testCaseId: string) =>
+    fromResponse<TestCaseCheckerResult[]>(
+      testCaseHttp.get(`/test-generation/checker/test-cases/${encodeURIComponent(testCaseId)}/results`),
+    ),
+  latestResultByTestCase: (testCaseId: string) =>
+    nullableFromResponse<TestCaseCheckerResult>(
+      testCaseHttp.get(`/test-generation/checker/test-cases/${encodeURIComponent(testCaseId)}/latest-result`),
+    ),
+  resultsByJob: (jobId: string) =>
+    fromResponse<TestCaseCheckerResult[]>(
+      testCaseHttp.get(`/test-generation/checker/jobs/${encodeURIComponent(jobId)}/results`),
+    ),
 }
 
 export const rewriteApi = {

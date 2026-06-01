@@ -93,7 +93,7 @@ export function SemanticGroupPage() {
 
   const rewriteMutation = useMutation({
     mutationFn: () =>
-      rewriteApi.group({
+      rewriteApi.semanticGroup({
         semanticRuleId,
         workflowId,
         rewriteMode,

@@ -23,7 +23,7 @@ import {
   type SemanticRule,
 } from '../api'
 import { WorkflowStagePipeline, type WorkflowStage } from '../components/WorkflowStagePipeline'
-import { Button, EmptyState, ErrorNotice, PageTitle, Panel, PanelHeader, StatusPill } from '../components/ui'
+import { Button, ErrorNotice, PageTitle, Panel, PanelHeader, StatusPill } from '../components/ui'
 import { useAppStore } from '../store'
 import { cn, formatDate } from '../utils'
 import { latestJob } from '../workflowJobUtils'

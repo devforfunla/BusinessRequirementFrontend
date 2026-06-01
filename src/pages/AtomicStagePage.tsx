@@ -2,7 +2,6 @@ import React, { type ReactNode, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  AlertTriangle,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
@@ -31,6 +30,7 @@ import {
   parseJsonText,
   rewriteApi,
   semanticRulesApi,
+  traceLogsApi,
   workflowsApi,
   type AsyncJob,
   type AtomicRule,
@@ -215,7 +215,6 @@ export function AtomicStagePage() {
     mutationFn: ({
       atomicRuleId,
       semanticRuleId,
-      semanticRuleCode,
       rewriteMode,
       humanFeedback,
     }: {
@@ -239,7 +238,6 @@ export function AtomicStagePage() {
   const rewriteAllMutation = useMutation({
     mutationFn: ({
       semanticRuleId,
-      semanticRuleCode,
       rewriteMode,
       humanFeedback,
     }: {
@@ -253,6 +251,15 @@ export function AtomicStagePage() {
       setActiveGroupJobs((prev) => ({ ...prev, [semanticRuleCode]: response.jobId }))
       toast.success('Group rewrite job queued')
       void queryClient.invalidateQueries({ queryKey: ['workflow-jobs', workflowId] })
+    },
+    onError: (error) => toast.error(getErrorMessage(error)),
+  })
+
+  const bulkApproveMutation = useMutation({
+    mutationFn: ({ ruleIds }: { ruleIds: string[] }) => atomicRulesApi.bulkApprove(ruleIds, reviewerId),
+    onSuccess: (result) => {
+      toast.success(`Approved ${result.approved} of ${result.total} atomic rules`)
+      void queryClient.invalidateQueries({ queryKey: atomicRulesQueryKey })
     },
     onError: (error) => toast.error(getErrorMessage(error)),
   })
@@ -696,6 +703,37 @@ export function AtomicStagePage() {
                                         <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
                                         Rewrite all with checker feedback
                                       </Button>
+                                    )}
+                                    {group.parent && (
+                                      approvedCount === group.rules.length ? (
+                                        <span className="inline-flex items-center gap-1 rounded-full bg-[#ecfdf3] px-2 py-0.5 text-xs font-medium text-[#079455]">
+                                          <CheckCircle2 className="h-3 w-3" aria-hidden="true" />
+                                          All approved
+                                        </span>
+                                      ) : (
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          disabled={bulkApproveMutation.isPending}
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            const unapproved = group.rules.filter((r) => r.status !== 'APPROVED')
+                                            const failingUnapproved = unapproved.filter((r) => {
+                                              const cr = atomicResultByRule.get(r.id)
+                                              return cr && cr.llmIsPassing !== 'PASSED'
+                                            })
+                                            if (failingUnapproved.length > 0) {
+                                              toast.warning(`${failingUnapproved.length} of ${unapproved.length} unapproved rules have failed checker`)
+                                            }
+                                            bulkApproveMutation.mutate({
+                                              ruleIds: unapproved.map((r) => r.id),
+                                            })
+                                          }}
+                                        >
+                                          <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+                                          Approve {approvedCount > 0 ? `remaining ${group.rules.length - approvedCount}` : 'all'}
+                                        </Button>
+                                      )
                                     )}
                                     {checkedCount > 0 && (
                                       failedCount === 0 ? (
@@ -1285,8 +1323,10 @@ function JobHistoryTable({ jobs, jobTypes }: { jobs: AsyncJob[]; jobTypes: strin
               <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Triggered By</th>
               <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Maker Job</th>
               <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Created</th>
-              <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Error</th>
+              <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Input</th>
               <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Result</th>
+              <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">LLM</th>
+              <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Error</th>
             </tr>
           </thead>
           <tbody>
@@ -1317,7 +1357,9 @@ function JobHistoryTable({ jobs, jobTypes }: { jobs: AsyncJob[]; jobTypes: strin
                     )}
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 text-[#667085]">{formatDate(job.createdAt)}</td>
-                  <td className="max-w-xs px-4 py-3 text-xs text-[#b42318]">{job.errorMessage || '-'}</td>
+                  <td className="px-4 py-3">
+                    <JsonViewButton title={`${job.jobType} Input`} value={job.inputPayload} />
+                  </td>
                   <td className="px-4 py-3">
                     <div className="flex gap-2">
                       <JsonViewButton title={`${job.jobType} Result`} value={job.resultPayload} />
@@ -1326,6 +1368,10 @@ function JobHistoryTable({ jobs, jobTypes }: { jobs: AsyncJob[]; jobTypes: strin
                       ) : null}
                     </div>
                   </td>
+                  <td className="px-4 py-3">
+                    <LlmTraceButton jobId={job.id} />
+                  </td>
+                  <td className="max-w-xs px-4 py-3 text-xs text-[#b42318]">{job.errorMessage || '-'}</td>
                 </tr>
               )
             })}
@@ -1523,6 +1569,92 @@ function ConsolidatedJsonPane({
         )}
       </div>
     </div>
+  )
+}
+
+function LlmTraceButton({ jobId }: { jobId: string }) {
+  const [open, setOpen] = useState(false)
+
+  const traceQuery = useQuery({
+    queryKey: ['trace', jobId],
+    queryFn: () => traceLogsApi.getByJobId(jobId),
+    enabled: open,
+  })
+
+  return (
+    <>
+      <Button size="sm" onClick={() => setOpen(true)}>LLM</Button>
+      {open ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-[#101828]/35 backdrop-blur-sm" onClick={() => setOpen(false)} />
+          <div className="relative mx-4 flex h-[calc(100vh-2rem)] w-full max-w-[calc(100vw-2rem)] flex-col rounded-lg border border-[#c8d0dc] bg-white shadow-2xl my-4">
+            <div className="flex items-center justify-between border-b border-[#e3e8f0] bg-[#f8fafc] px-5 py-3">
+              <h2 className="text-sm font-semibold text-[#172033]">LLM Trace — {jobId}</h2>
+              <Button size="sm" onClick={() => setOpen(false)}>Close</Button>
+            </div>
+            <div className="flex-1 overflow-auto p-4">
+              {traceQuery.isLoading ? (
+                <p className="text-sm text-[#667085]">Loading trace...</p>
+              ) : traceQuery.error ? (
+                <p className="text-sm text-[#b42318]">Failed: {getErrorMessage(traceQuery.error)}</p>
+              ) : traceQuery.data ? (
+                <div className="space-y-6">
+                  {traceQuery.data.agentSessions.map((s, si) => (
+                    <div key={s.session.id}>
+                      <h3 className="mb-2 text-sm font-medium text-[#475467]">
+                        Session #{si + 1} — {s.session.finalStatus} — {s.session.totalTokens ?? 0} tokens
+                      </h3>
+                      {s.llmCalls.map((call, ci) => (
+                        <details key={ci} className="mb-3 rounded-md border border-[#e3e8f0]">
+                          <summary className="cursor-pointer bg-[#f8fafc] px-3 py-2 text-xs font-medium text-[#475467]">
+                            Call #{ci + 1} — {call.model} — {call.status}
+                            {call.promptTokens != null ? ` — ${call.promptTokens}+${call.completionTokens ?? 0} tokens` : ''}
+                          </summary>
+                          <div className="p-3 space-y-3">
+                            <div>
+                              <p className="mb-1 text-xs font-semibold text-[#667085]">LLM Input (Prompt)</p>
+                              <pre className="max-h-96 overflow-auto rounded-md bg-[#f8fafc] p-3 text-xs text-[#24292f] whitespace-pre-wrap break-all">{call.prompt}</pre>
+                            </div>
+                            <div>
+                              <p className="mb-1 text-xs font-semibold text-[#667085]">LLM Output (Response)</p>
+                              <pre className="max-h-96 overflow-auto rounded-md bg-[#f8fafc] p-3 text-xs text-[#24292f] whitespace-pre-wrap break-all">{call.response || '(no response)'}</pre>
+                            </div>
+                          </div>
+                        </details>
+                      ))}
+                    </div>
+                  ))}
+                  {traceQuery.data.unscopedLlmCalls.length > 0 && (
+                    <div>
+                      <h3 className="mb-2 text-sm font-medium text-[#475467]">Unscoped Calls</h3>
+                      {traceQuery.data.unscopedLlmCalls.map((call, ci) => (
+                        <details key={ci} className="mb-3 rounded-md border border-[#e3e8f0]">
+                          <summary className="cursor-pointer bg-[#f8fafc] px-3 py-2 text-xs font-medium text-[#475467]">
+                            Call #{ci + 1} — {call.model} — {call.status}
+                          </summary>
+                          <div className="p-3 space-y-3">
+                            <div>
+                              <p className="mb-1 text-xs font-semibold text-[#667085]">LLM Input</p>
+                              <pre className="max-h-96 overflow-auto rounded-md bg-[#f8fafc] p-3 text-xs text-[#24292f] whitespace-pre-wrap break-all">{call.prompt}</pre>
+                            </div>
+                            <div>
+                              <p className="mb-1 text-xs font-semibold text-[#667085]">LLM Output</p>
+                              <pre className="max-h-96 overflow-auto rounded-md bg-[#f8fafc] p-3 text-xs text-[#24292f] whitespace-pre-wrap break-all">{call.response || '(no response)'}</pre>
+                            </div>
+                          </div>
+                        </details>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm text-[#667085]">No trace data</p>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </>
   )
 }
 
