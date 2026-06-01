@@ -64,7 +64,7 @@ import { latestJob } from '../workflowJobUtils'
 type AtomicJobAction = 'atomic-maker' | 'atomic-checker'
 type AtomicRewriteMode = 'CHECKER_FEEDBACK' | 'HUMAN_FEEDBACK'
 
-const atomicJobTypes = ['ATOMIC_MAKER', 'ATOMIC_CHECKER', 'ATOMIC_REWRITE', 'EDIT']
+const atomicJobTypes = ['ATOMIC_MAKER', 'ATOMIC_CHECKER', 'ATOMIC_REWRITE', 'ATOMIC_REWRITE_CHECKER_FEEDBACK', 'ATOMIC_REWRITE_HUMAN_FEEDBACK', 'EDIT']
 const approvedButtonClass =
   'border-[#079455] bg-[#079455] text-white hover:bg-[#079455] disabled:cursor-default disabled:opacity-100'
 
@@ -82,12 +82,14 @@ export function AtomicStagePage() {
   const setDocumentId = useAppStore((state) => state.setDocumentId)
   const setWorkflowId = useAppStore((state) => state.setWorkflowId)
   const [activeJobId, setActiveJobId] = useState<string | null>(null)
+  const [activeGroupJobs, setActiveGroupJobs] = useState<Record<string, string>>({})
   const [activeTab, setActiveTab] = useState<string>('maker')
   const [humanRewriteRule, setHumanRewriteRule] = useState<AtomicRule | null>(null)
   const [humanFeedback, setHumanFeedback] = useState('')
   const [editRule, setEditRule] = useState<AtomicRule | null>(null)
   const [editText, setEditText] = useState('')
   const [consolidatedRule, setConsolidatedRule] = useState<{ rule: AtomicRule; checkerJson?: string | null } | null>(null)
+  const [versionHistoryRule, setVersionHistoryRule] = useState<AtomicRule | null>(null)
   const atomicRulesQueryKey = ['atomic-rules', workflowId] as const
 
   useEffect(() => {
@@ -150,7 +152,7 @@ export function AtomicStagePage() {
   useEffect(() => {
     const jobs = jobsQuery.data || []
     const atomicJobs = jobs.filter((j) => atomicJobTypes.includes(j.jobType))
-    const hasRewrite = atomicJobs.some((j) => j.jobType === 'ATOMIC_REWRITE' || j.jobType === 'EDIT')
+    const hasRewrite = atomicJobs.some((j) => j.jobType === 'ATOMIC_REWRITE' || j.jobType === 'ATOMIC_REWRITE_CHECKER_FEEDBACK' || j.jobType === 'ATOMIC_REWRITE_HUMAN_FEEDBACK' || j.jobType === 'EDIT')
     const hasChecker = atomicJobs.some((j) => j.jobType === 'ATOMIC_CHECKER')
     if (hasRewrite) setActiveTab('review')
     else if (hasChecker) setActiveTab('checker')
@@ -161,19 +163,29 @@ export function AtomicStagePage() {
   useEffect(() => {
     const job = jobQuery.data
     if (!job) return
+    const complete = () => {
+      setActiveJobId(null)
+      setActiveGroupJobs((prev) => {
+        const next = { ...prev }
+        for (const key of Object.keys(next)) {
+          if (next[key] === job.id) delete next[key]
+        }
+        return next
+      })
+    }
     if (job.status === 'SUCCEEDED') {
       toast.success(`${formatJobType(job.jobType)} completed`)
-      window.setTimeout(() => setActiveJobId(null), 0)
+      window.setTimeout(complete, 0)
       void queryClient.invalidateQueries()
     }
     if (job.status === 'PARTIAL_SUCCESS') {
       toast.warning(`${formatJobType(job.jobType)} completed with partial success`)
-      window.setTimeout(() => setActiveJobId(null), 0)
+      window.setTimeout(complete, 0)
       void queryClient.invalidateQueries()
     }
     if (job.status === 'FAILED') {
       toast.error(job.errorMessage || `${formatJobType(job.jobType)} failed`)
-      window.setTimeout(() => setActiveJobId(null), 0)
+      window.setTimeout(complete, 0)
     }
   }, [jobQuery.data, queryClient])
 
@@ -203,19 +215,43 @@ export function AtomicStagePage() {
     mutationFn: ({
       atomicRuleId,
       semanticRuleId,
+      semanticRuleCode,
       rewriteMode,
       humanFeedback,
     }: {
       atomicRuleId: string
       semanticRuleId: string
+      semanticRuleCode: string
       rewriteMode: AtomicRewriteMode
       humanFeedback?: string
     }) => rewriteApi.group({ atomicRuleId, semanticRuleId, workflowId, rewriteMode, humanFeedback }),
-    onSuccess: (response) => {
+    onSuccess: (response, { semanticRuleCode }) => {
       setActiveJobId(response.jobId)
+      setActiveGroupJobs((prev) => ({ ...prev, [semanticRuleCode]: response.jobId }))
       setHumanRewriteRule(null)
       setHumanFeedback('')
       toast.success('Atomic rewrite job queued')
+      void queryClient.invalidateQueries({ queryKey: ['workflow-jobs', workflowId] })
+    },
+    onError: (error) => toast.error(getErrorMessage(error)),
+  })
+
+  const rewriteAllMutation = useMutation({
+    mutationFn: ({
+      semanticRuleId,
+      semanticRuleCode,
+      rewriteMode,
+      humanFeedback,
+    }: {
+      semanticRuleId: string
+      semanticRuleCode: string
+      rewriteMode: AtomicRewriteMode
+      humanFeedback?: string
+    }) => rewriteApi.semanticGroup({ semanticRuleId, workflowId, rewriteMode, humanFeedback }),
+    onSuccess: (response, { semanticRuleCode }) => {
+      setActiveJobId(response.jobId)
+      setActiveGroupJobs((prev) => ({ ...prev, [semanticRuleCode]: response.jobId }))
+      toast.success('Group rewrite job queued')
       void queryClient.invalidateQueries({ queryKey: ['workflow-jobs', workflowId] })
     },
     onError: (error) => toast.error(getErrorMessage(error)),
@@ -534,7 +570,7 @@ export function AtomicStagePage() {
         {/* ===== Review Tab ===== */}
         {activeTab === 'review' ? (
           <div className="space-y-4 p-4">
-            <WorkflowStageJobs title="Review Jobs" jobs={jobs} jobTypes={['ATOMIC_REWRITE', 'EDIT']} />
+            <WorkflowStageJobs title="Review Jobs" jobs={jobs} jobTypes={['ATOMIC_REWRITE', 'ATOMIC_REWRITE_CHECKER_FEEDBACK', 'ATOMIC_REWRITE_HUMAN_FEEDBACK', 'EDIT']} />
 
             <Panel>
               <PanelHeader
@@ -580,6 +616,7 @@ export function AtomicStagePage() {
                         <tr>
                           <th className="w-10 border-b border-[#e3e8f0] px-3 py-3"></th>
                           <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Rule</th>
+                          <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Version</th>
                           <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Status</th>
                           <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Checker</th>
                           <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Summary</th>
@@ -597,6 +634,12 @@ export function AtomicStagePage() {
                             const result = atomicResultByRule.get(r.id)
                             return result?.llmIsPassing === 'PASSED'
                           }).length
+                          const failedCount = group.rules.filter((r) => {
+                            const result = atomicResultByRule.get(r.id)
+                            return result && result.llmIsPassing !== 'PASSED'
+                          }).length
+                          const rewrittenCount = group.rules.filter((r) => (r.atomicVersion ?? 0) > 1).length
+                          const checkedCount = group.rules.filter((r) => atomicResultByRule.has(r.id)).length
                           return (
                             <React.Fragment key={group.key}>
                               {/* Group header row */}
@@ -618,7 +661,7 @@ export function AtomicStagePage() {
                                     <ChevronRight className="h-4 w-4" aria-hidden="true" />
                                   )}
                                 </td>
-                                <td className="px-4 py-3" colSpan={8}>
+                                <td className="px-4 py-3" colSpan={9}>
                                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                                     {group.parent ? (
                                       <Link
@@ -636,6 +679,37 @@ export function AtomicStagePage() {
                                         {group.parent.llmBusinessIntent || group.parent.llmSummary || ''}
                                       </span>
                                     )}
+                                    {group.parent && (
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        disabled={rewriteAllMutation.isPending || Boolean(activeGroupJobs[group.key]) || failedCount === 0}
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          rewriteAllMutation.mutate({
+                                            semanticRuleId: group.parent!.id,
+                                            semanticRuleCode: group.key,
+                                            rewriteMode: 'CHECKER_FEEDBACK',
+                                          })
+                                        }}
+                                      >
+                                        <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+                                        Rewrite all with checker feedback
+                                      </Button>
+                                    )}
+                                    {checkedCount > 0 && (
+                                      failedCount === 0 ? (
+                                        <span className="inline-flex items-center gap-1 rounded-full bg-[#ecfdf3] px-2 py-0.5 text-xs font-medium text-[#079455]">
+                                          <CheckCircle2 className="h-3 w-3" aria-hidden="true" />
+                                          All passed
+                                        </span>
+                                      ) : (
+                                        <span className="inline-flex items-center gap-1 rounded-full bg-[#fef3f2] px-2 py-0.5 text-xs font-medium text-[#b42318]">
+                                          <XCircle className="h-3 w-3" aria-hidden="true" />
+                                          {failedCount} of {group.rules.length} failed
+                                        </span>
+                                      )
+                                    )}
                                     <span className="ml-auto flex items-center gap-2 text-xs text-[#98a2b3]">
                                       <span className="rounded-full bg-white px-2 py-0.5 font-medium text-[#475467]">
                                         {group.rules.length} rule{group.rules.length !== 1 ? 's' : ''}
@@ -650,6 +724,11 @@ export function AtomicStagePage() {
                                           {passedCount} passed
                                         </span>
                                       )}
+                                      {rewrittenCount > 0 && (
+                                        <span className="rounded-full bg-[#f5f3ff] px-2 py-0.5 font-medium text-[#6d28d9]">
+                                          {rewrittenCount} rewritten
+                                        </span>
+                                      )}
                                     </span>
                                   </div>
                                 </td>
@@ -661,13 +740,26 @@ export function AtomicStagePage() {
                                 return (
                                   <tr key={rule.id} className="border-b border-[#edf1f6] align-top last:border-0">
                                     <td className="px-3 py-3"></td>
-                                    <td className="px-4 py-3">
-                                      <p className="font-medium text-[#172033]">{getAtomicRuleCode(rule)}</p>
-                                      <p className="text-xs text-[#667085]">
-                                        v{rule.atomicVersion ?? 0}
-                                        {rule.llmSection ? ` - ${rule.llmSection}` : ''}
-                                      </p>
-                                    </td>
+                                      <td className="px-4 py-3">
+                                        <p className="font-medium text-[#172033]">{getAtomicRuleCode(rule)}</p>
+                                        {rule.llmSection ? (
+                                          <p className="text-xs text-[#667085]">{rule.llmSection}</p>
+                                        ) : null}
+                                      </td>
+                                      <td className="px-4 py-3">
+                                        <button
+                                          type="button"
+                                          className={cn(
+                                            'inline-flex cursor-pointer rounded-full px-2 py-0.5 text-xs font-medium hover:opacity-80',
+                                            (rule.atomicVersion ?? 0) > 1
+                                              ? 'bg-[#f5f3ff] text-[#6d28d9]'
+                                              : 'bg-[#f0f1f3] text-[#667085]',
+                                          )}
+                                          onClick={() => setVersionHistoryRule(rule)}
+                                        >
+                                          v{rule.atomicVersion ?? 0}
+                                        </button>
+                                      </td>
                                     <td className="px-4 py-3"><StatusPill value={rule.status} /></td>
                                     <td className="px-4 py-3"><StatusPill value={result?.llmIsPassing || 'NOT_CHECKED'} /></td>
                                     <td className="max-w-xs px-4 py-3 text-[#475467]">
@@ -710,10 +802,11 @@ export function AtomicStagePage() {
                                             rewriteGroupMutation.mutate({
                                               atomicRuleId: rule.id,
                                               semanticRuleId: group.parent.id,
+                                              semanticRuleCode: group.key,
                                               rewriteMode: 'CHECKER_FEEDBACK',
                                             })
                                           }}
-                                          disabled={rewriteGroupMutation.isPending || Boolean(activeJobId) || !group.parent || !result}
+                                          disabled={rewriteGroupMutation.isPending || Boolean(activeGroupJobs[group.key]) || !group.parent || !result}
                                         >
                                           <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
                                           Checker rewrite
@@ -722,7 +815,7 @@ export function AtomicStagePage() {
                                           size="sm"
                                           title={!group.parent ? 'Semantic parent not found' : undefined}
                                           onClick={() => setHumanRewriteRule(rule)}
-                                          disabled={rewriteGroupMutation.isPending || Boolean(activeJobId) || !group.parent}
+                                          disabled={rewriteGroupMutation.isPending || Boolean(activeGroupJobs[group.key]) || !group.parent}
                                         >
                                           <MessageSquareText className="h-3.5 w-3.5" aria-hidden="true" />
                                           Human rewrite
@@ -780,6 +873,7 @@ export function AtomicStagePage() {
               rewriteGroupMutation.mutate({
                 atomicRuleId: humanRewriteRule.id,
                 semanticRuleId: humanRewriteParent.id,
+                semanticRuleCode: getSemanticRuleCode(humanRewriteParent),
                 rewriteMode: 'HUMAN_FEEDBACK',
                 humanFeedback,
               })
@@ -851,6 +945,14 @@ export function AtomicStagePage() {
           atomicJson={consolidatedRule.rule.llmOutputJson || consolidatedRule.rule.content}
           checkerJson={consolidatedRule.checkerJson}
           onClose={() => setConsolidatedRule(null)}
+        />
+      ) : null}
+
+      {versionHistoryRule ? (
+        <VersionHistoryDialog
+          rule={versionHistoryRule}
+          workflowId={workflowId}
+          onClose={() => setVersionHistoryRule(null)}
         />
       ) : null}
     </div>
@@ -1189,7 +1291,7 @@ function JobHistoryTable({ jobs, jobTypes }: { jobs: AsyncJob[]; jobTypes: strin
           </thead>
           <tbody>
             {stageJobs.map((job, index) => {
-              const isEdit = job.jobType === 'EDIT' || job.jobType === 'ATOMIC_REWRITE'
+              const isEdit = job.jobType === 'EDIT' || job.jobType === 'ATOMIC_REWRITE' || job.jobType === 'ATOMIC_REWRITE_CHECKER_FEEDBACK' || job.jobType === 'ATOMIC_REWRITE_HUMAN_FEEDBACK'
               return (
                 <tr key={job.id} className={cn('border-b border-[#edf1f6] align-top last:border-0', isJobRunning(job.status) && 'bg-[#fafcff]')}>
                   <td className="px-4 py-3 text-[#667085]">{stageJobs.length - index}</td>
@@ -1429,6 +1531,8 @@ function JobTypePill({ jobType }: { jobType: string }) {
     ATOMIC_MAKER: 'border-[#b8ccf0] bg-[#eff6ff] text-[#175cd3]',
     ATOMIC_CHECKER: 'border-[#f5c97a] bg-[#fffbeb] text-[#b54708]',
     ATOMIC_REWRITE: 'border-[#c4b5fd] bg-[#f5f3ff] text-[#6d28d9]',
+    ATOMIC_REWRITE_CHECKER_FEEDBACK: 'border-[#93c5fd] bg-[#eff6ff] text-[#1d4ed8]',
+    ATOMIC_REWRITE_HUMAN_FEEDBACK: 'border-[#fcd34d] bg-[#fffbeb] text-[#b45309]',
     EDIT: 'border-[#99f6e4] bg-[#f0fdfa] text-[#0f766e]',
   }
   const label = jobType.replaceAll('_', ' ')
@@ -1436,5 +1540,117 @@ function JobTypePill({ jobType }: { jobType: string }) {
     <span className={cn('inline-flex rounded-full border px-2 py-0.5 text-xs font-medium', colors[jobType] || 'border-[#d8dee8] bg-[#f8fafc] text-[#475467]')}>
       {label}
     </span>
+  )
+}
+
+function VersionHistoryDialog({ rule, workflowId, onClose }: { rule: AtomicRule; workflowId: string; onClose: () => void }) {
+  const ruleCode = getAtomicRuleCode(rule)
+  const [selectedVersions, setSelectedVersions] = useState<number[]>([])
+
+  const historyQuery = useQuery({
+    queryKey: ['atomic-version-history', workflowId, ruleCode],
+    queryFn: () => atomicRulesApi.versionHistory(ruleCode, workflowId),
+  })
+
+  const versions = historyQuery.data || []
+
+  const toggleVersion = (v: number) => {
+    setSelectedVersions((prev) => {
+      if (prev.includes(v)) return prev.filter((x) => x !== v)
+      if (prev.length >= 2) return [prev[1], v]
+      return [...prev, v]
+    })
+  }
+
+  const [v1, v2] = selectedVersions.sort((a, b) => a - b)
+  const canCompare = selectedVersions.length === 2
+
+  const compareQuery = useQuery({
+    queryKey: ['atomic-compare', workflowId, ruleCode, v1, v2],
+    queryFn: () => atomicRulesApi.compareVersions(ruleCode, workflowId, v1, v2),
+    enabled: canCompare,
+  })
+
+  const compareData = compareQuery.data
+  const oldJson = compareData?.version1?.llmOutputJson
+  const newJson = compareData?.version2?.llmOutputJson
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-[#101828]/35 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative mx-4 flex h-[calc(100vh-2rem)] w-full max-w-[calc(100vw-2rem)] flex-col rounded-lg border border-[#c8d0dc] bg-white shadow-2xl my-4">
+        <div className="flex items-center justify-between border-b border-[#e3e8f0] bg-[#f8fafc] px-5 py-3">
+          <div className="flex items-center gap-2.5">
+            <h2 className="text-sm font-semibold text-[#172033]">
+              Version History — {ruleCode}
+            </h2>
+          </div>
+          <div className="flex items-center gap-2">
+            {canCompare ? (
+              <Button size="sm" variant="primary" onClick={() => compareQuery.refetch()}>
+                Compare v{v1} → v{v2}
+              </Button>
+            ) : null}
+            <Button size="sm" onClick={onClose}>Close</Button>
+          </div>
+        </div>
+        <div className="flex-1 overflow-auto">
+          {historyQuery.isLoading ? (
+            <div className="p-4 text-sm text-[#667085]">Loading versions...</div>
+          ) : historyQuery.error ? (
+            <div className="p-4 text-sm text-[#b42318]">Failed to load: {getErrorMessage(historyQuery.error)}</div>
+          ) : versions.length === 0 ? (
+            <div className="p-4 text-sm text-[#667085]">No versions found.</div>
+          ) : canCompare && compareQuery.isSuccess ? (
+            <DiffView oldJson={oldJson} newJson={newJson} oldLabel={`v${v1}`} newLabel={`v${v2}`} />
+          ) : (
+            <div className="p-4">
+              <p className="mb-3 text-xs text-[#667085]">Select 2 versions to compare. Current: v{rule.atomicVersion ?? 0}</p>
+              <div className="space-y-1">
+                {versions.map((v) => {
+                  const isSelected = selectedVersions.includes(v.atomicVersion ?? 0)
+                  const isCurrent = v.id === rule.id
+                  return (
+                    <button
+                      key={v.id}
+                      type="button"
+                      className={cn(
+                        'flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm transition-colors',
+                        isSelected ? 'bg-[#f5f3ff] ring-1 ring-[#c4b5fd]' : 'hover:bg-[#f4f6fa]',
+                      )}
+                      onClick={() => toggleVersion(v.atomicVersion ?? 0)}
+                    >
+                      <span className={cn(
+                        'flex h-5 w-5 items-center justify-center rounded border text-xs font-medium',
+                        isSelected
+                          ? 'border-[#6d28d9] bg-[#6d28d9] text-white'
+                          : 'border-[#d8dee8] bg-white text-transparent',
+                      )}>
+                        {isSelected ? (selectedVersions.indexOf(v.atomicVersion ?? 0) + 1) : ''}
+                      </span>
+                      <span className={cn(
+                        'rounded-full px-2 py-0.5 text-xs font-medium',
+                        (v.atomicVersion ?? 0) > 1 ? 'bg-[#f5f3ff] text-[#6d28d9]' : 'bg-[#f0f1f3] text-[#667085]',
+                      )}>
+                        v{v.atomicVersion ?? 0}
+                      </span>
+                      <span className="text-xs text-[#667085]">
+                        {v.updatedAt ? formatDate(v.updatedAt) : '-'}
+                      </span>
+                      {v.makerJobId ? (
+                        <span className="font-mono text-xs text-[#98a2b3] truncate">{v.makerJobId}</span>
+                      ) : null}
+                      {isCurrent ? (
+                        <span className="ml-auto rounded-full bg-[#ecfdf3] px-2 py-0.5 text-xs font-medium text-[#079455]">current</span>
+                      ) : null}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   )
 }

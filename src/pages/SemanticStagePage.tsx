@@ -1074,6 +1074,8 @@ function JobTypePill({ jobType }: { jobType: string }) {
     ATOMIC_MAKER: 'border-[#b8ccf0] bg-[#eff6ff] text-[#175cd3]',
     ATOMIC_CHECKER: 'border-[#f5c97a] bg-[#fffbeb] text-[#b54708]',
     ATOMIC_REWRITE: 'border-[#c4b5fd] bg-[#f5f3ff] text-[#6d28d9]',
+    ATOMIC_REWRITE_CHECKER_FEEDBACK: 'border-[#93c5fd] bg-[#eff6ff] text-[#1d4ed8]',
+    ATOMIC_REWRITE_HUMAN_FEEDBACK: 'border-[#fcd34d] bg-[#fffbeb] text-[#b45309]',
     EDIT: 'border-[#99f6e4] bg-[#f0fdfa] text-[#0f766e]',
   }
   const label = jobType.replaceAll('_', ' ')

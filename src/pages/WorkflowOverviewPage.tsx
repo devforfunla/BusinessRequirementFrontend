@@ -51,7 +51,7 @@ const stageCards: StageCardDef[] = [
     label: 'Atomic Rule',
     icon: <ClipboardCheck className="h-5 w-5" />,
     href: (wid) => `/workflows/${encodeURIComponent(wid)}/atomic`,
-    jobTypes: ['ATOMIC_MAKER', 'ATOMIC_CHECKER', 'ATOMIC_REWRITE', 'EDIT'],
+    jobTypes: ['ATOMIC_MAKER', 'ATOMIC_CHECKER', 'ATOMIC_REWRITE', 'ATOMIC_REWRITE_CHECKER_FEEDBACK', 'ATOMIC_REWRITE_HUMAN_FEEDBACK', 'EDIT'],
     group: 'Business Analysis',
   },
   {
@@ -321,6 +321,6 @@ function resolveActiveStage(jobs: AsyncJob[]): WorkflowStage {
   const jobTypes = new Set(jobs.map((j) => j.jobType))
   if (jobTypes.has('BDD_MAKER') || jobTypes.has('BDD_CHECKER')) return 'bdd'
   if (jobTypes.has('TEST_CASE_MAKER') || jobTypes.has('TEST_CASE_CHECKER')) return 'test-cases'
-  if (jobTypes.has('ATOMIC_MAKER') || jobTypes.has('ATOMIC_CHECKER') || jobTypes.has('ATOMIC_REWRITE') || jobTypes.has('EDIT')) return 'atomic'
+  if (jobTypes.has('ATOMIC_MAKER') || jobTypes.has('ATOMIC_CHECKER') || jobTypes.has('ATOMIC_REWRITE') || jobTypes.has('ATOMIC_REWRITE_CHECKER_FEEDBACK') || jobTypes.has('ATOMIC_REWRITE_HUMAN_FEEDBACK') || jobTypes.has('EDIT')) return 'atomic'
   return 'semantic'
 }

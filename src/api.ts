@@ -475,6 +475,10 @@ export const atomicRulesApi = {
         params: { workflowId, version1, version2 },
       }),
     ),
+  versionHistory: (atomicRuleCode: string, workflowId: string) =>
+    fromResponse<AtomicRule[]>(http.get(atomicPath(`/atomic-rules/${encodeURIComponent(atomicRuleCode)}/versions`), {
+      params: { workflowId },
+    })),
 }
 
 export const atomicCheckerApi = {
@@ -499,6 +503,12 @@ export const rewriteApi = {
     rewriteMode: 'CHECKER_FEEDBACK' | 'HUMAN_FEEDBACK'
     humanFeedback?: string
   }) => fromResponse<JobResponse>(http.post(atomicPath('/rewrite/group'), payload)),
+  semanticGroup: (payload: {
+    semanticRuleId: string
+    workflowId: string
+    rewriteMode: 'CHECKER_FEEDBACK' | 'HUMAN_FEEDBACK'
+    humanFeedback?: string
+  }) => fromResponse<JobResponse>(http.post(atomicPath('/rewrite/semantic-group'), payload)),
 }
 
 export const skillsApi = {
