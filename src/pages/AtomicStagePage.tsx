@@ -1,9 +1,11 @@
-import { type ReactNode, useEffect, useState } from 'react'
+import React, { type ReactNode, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AlertTriangle,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   Columns,
   Edit3,
   Eye,
@@ -257,6 +259,21 @@ export function AtomicStagePage() {
   const approvedSemanticCount = semanticRules.filter((rule) => rule.approvalStatus === 'APPROVED').length
   const canRunAtomicMaker = semanticRules.length > 0 && approvedSemanticCount === semanticRules.length
   const atomicResultByRule = new Map(atomicResults.map((result) => [result.targetRuleId, result]))
+
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
+
+  const groupedAtomicRules = useMemo(() => {
+    const groupMap = new Map<string, { parent: SemanticRule | null; rules: AtomicRule[] }>()
+    for (const rule of atomicRules) {
+      const parent = findParentSemanticRule(rule, semanticRules)
+      const key = parent ? getSemanticRuleCode(parent) : '__ungrouped__'
+      if (!groupMap.has(key)) {
+        groupMap.set(key, { parent, rules: [] })
+      }
+      groupMap.get(key)!.rules.push(rule)
+    }
+    return [...groupMap.entries()].map(([key, group]) => ({ key, ...group }))
+  }, [atomicRules, semanticRules])
   const humanRewriteParent = humanRewriteRule ? findParentSemanticRule(humanRewriteRule, semanticRules) : null
   const firstError =
     workflowQuery.error || jobsQuery.error || semanticRulesQuery.error || atomicRulesQuery.error || atomicRunQuery.error || atomicResultsQuery.error || extractionGroupsQuery.error
@@ -538,118 +555,194 @@ export function AtomicStagePage() {
               {atomicRules.length === 0 && !atomicRulesQuery.isLoading ? (
                 <div className="p-4"><EmptyState title="No atomic rules yet" description="Approve semantic rules, then run atomic maker." /></div>
               ) : (
-                <StickyScrollX>
-                  <table className="w-full min-w-[1900px] border-collapse text-left text-sm">
-                    <thead className="bg-[#f8fafc] text-xs uppercase text-[#667085]">
-                      <tr>
-                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Rule</th>
-                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Semantic Parent</th>
-                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Status</th>
-                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Checker</th>
-                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Summary</th>
-                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Atomic JSON</th>
-                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Checker JSON</th>
-                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Consolidated</th>
-                        <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {atomicRules.map((rule) => {
-                        const result = atomicResultByRule.get(rule.id)
-                        const parent = findParentSemanticRule(rule, semanticRules)
-                        const isApproved = rule.status === 'APPROVED'
-                        return (
-                          <tr key={rule.id} className="border-b border-[#edf1f6] align-top last:border-0">
-                            <td className="px-4 py-3">
-                              <p className="font-medium text-[#172033]">{getAtomicRuleCode(rule)}</p>
-                              <p className="text-xs text-[#667085]">
-                                v{rule.atomicVersion ?? 0}
-                                {rule.llmSection ? ` - ${rule.llmSection}` : ''}
-                              </p>
-                            </td>
-                            <td className="px-4 py-3 text-[#475467]">
-                              {parent ? (
-                                <Link
-                                  className="font-medium text-[#175cd3] hover:underline"
-                                  to={`/workflows/${encodeURIComponent(workflowId)}/semantic/${encodeURIComponent(parent.id)}`}
-                                >
-                                  {getSemanticRuleCode(parent)}
-                                </Link>
-                              ) : (
-                                getAtomicRuleSemanticCode(rule)
-                              )}
-                            </td>
-                            <td className="px-4 py-3"><StatusPill value={rule.status} /></td>
-                            <td className="px-4 py-3"><StatusPill value={result?.llmIsPassing || 'NOT_CHECKED'} /></td>
-                            <td className="max-w-xs px-4 py-3 text-[#475467]">
-                              <TextDetails text={getAtomicRuleSummary(rule) || '-'} />
-                            </td>
-                            <td className="w-[100px] px-4 py-3">
-                              <JsonViewButton title={`${getAtomicRuleCode(rule)} JSON`} value={rule.llmOutputJson || rule.content} />
-                            </td>
-                            <td className="w-[100px] px-4 py-3">
-                              <JsonViewButton title={`${getAtomicRuleCode(rule)} Checker`} value={result?.llmReviewEntry || result?.llmFindings} />
-                            </td>
-                            <td className="w-[100px] px-4 py-3">
-                              <Button
-                                size="sm"
-                                onClick={() => setConsolidatedRule({
-                                  rule,
-                                  checkerJson: result?.llmReviewEntry || result?.llmFindings,
-                                })}
+                <>
+                  <div className="flex items-center gap-2 px-4 py-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setExpandedGroups(new Set(groupedAtomicRules.map((g) => g.key)))}
+                    >
+                      <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
+                      Expand All
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setExpandedGroups(new Set())}
+                    >
+                      <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+                      Collapse All
+                    </Button>
+                  </div>
+                  <StickyScrollX>
+                    <table className="w-full min-w-[1500px] border-collapse text-left text-sm">
+                      <thead className="bg-[#f8fafc] text-xs uppercase text-[#667085]">
+                        <tr>
+                          <th className="w-10 border-b border-[#e3e8f0] px-3 py-3"></th>
+                          <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Rule</th>
+                          <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Status</th>
+                          <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Checker</th>
+                          <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Summary</th>
+                          <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Atomic JSON</th>
+                          <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Checker JSON</th>
+                          <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Consolidated</th>
+                          <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {groupedAtomicRules.map((group) => {
+                          const isExpanded = expandedGroups.has(group.key)
+                          const approvedCount = group.rules.filter((r) => r.status === 'APPROVED').length
+                          const passedCount = group.rules.filter((r) => {
+                            const result = atomicResultByRule.get(r.id)
+                            return result?.llmIsPassing === 'PASSED'
+                          }).length
+                          return (
+                            <React.Fragment key={group.key}>
+                              {/* Group header row */}
+                              <tr
+                                className="cursor-pointer border-b border-[#d8dee8] bg-[#f4f6fa] hover:bg-[#eaedf3] align-top"
+                                onClick={() => {
+                                  setExpandedGroups((prev) => {
+                                    const next = new Set(prev)
+                                    if (next.has(group.key)) next.delete(group.key)
+                                    else next.add(group.key)
+                                    return next
+                                  })
+                                }}
                               >
-                                <Columns className="h-3.5 w-3.5" aria-hidden="true" />
-                                View
-                              </Button>
-                            </td>
-                            <td className="px-4 py-3">
-                              <div className="flex flex-wrap gap-2">
-                                <Button
-                                  size="sm"
-                                  onClick={() => approveAtomicMutation.mutate(rule.id)}
-                                  disabled={approveAtomicMutation.isPending || isApproved}
-                                  className={isApproved ? approvedButtonClass : undefined}
-                                >
-                                  <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
-                                  {isApproved ? 'Approved' : 'Approve'}
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  title={!parent ? 'Semantic parent not found' : !result ? 'Run atomic checker first' : undefined}
-                                  onClick={() => {
-                                    if (!parent) return
-                                    rewriteGroupMutation.mutate({
-                                      atomicRuleId: rule.id,
-                                      semanticRuleId: parent.id,
-                                      rewriteMode: 'CHECKER_FEEDBACK',
-                                    })
-                                  }}
-                                  disabled={rewriteGroupMutation.isPending || Boolean(activeJobId) || !parent || !result}
-                                >
-                                  <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
-                                  Checker rewrite
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  title={!parent ? 'Semantic parent not found' : undefined}
-                                  onClick={() => setHumanRewriteRule(rule)}
-                                  disabled={rewriteGroupMutation.isPending || Boolean(activeJobId) || !parent}
-                                >
-                                  <MessageSquareText className="h-3.5 w-3.5" aria-hidden="true" />
-                                  Human rewrite
-                                </Button>
-                                <Button size="sm" onClick={() => openEditDialog(rule)} disabled={editAtomicMutation.isPending}>
-                                  <Edit3 className="h-3.5 w-3.5" aria-hidden="true" />
-                                  Edit
-                                </Button>
-                              </div>
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                </StickyScrollX>
+                                <td className="px-3 py-3 text-[#667085]">
+                                  {isExpanded ? (
+                                    <ChevronDown className="h-4 w-4" aria-hidden="true" />
+                                  ) : (
+                                    <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                                  )}
+                                </td>
+                                <td className="px-4 py-3" colSpan={8}>
+                                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                                    {group.parent ? (
+                                      <Link
+                                        className="font-semibold text-[#175cd3] hover:underline"
+                                        to={`/workflows/${encodeURIComponent(workflowId)}/semantic/${encodeURIComponent(group.parent.id)}`}
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        {getSemanticRuleCode(group.parent)}
+                                      </Link>
+                                    ) : (
+                                      <span className="font-semibold text-[#667085]">Ungrouped ({group.key})</span>
+                                    )}
+                                    {group.parent && (
+                                      <span className="max-w-lg truncate text-[#667085]">
+                                        {group.parent.llmBusinessIntent || group.parent.llmSummary || ''}
+                                      </span>
+                                    )}
+                                    <span className="ml-auto flex items-center gap-2 text-xs text-[#98a2b3]">
+                                      <span className="rounded-full bg-white px-2 py-0.5 font-medium text-[#475467]">
+                                        {group.rules.length} rule{group.rules.length !== 1 ? 's' : ''}
+                                      </span>
+                                      {approvedCount > 0 && (
+                                        <span className="rounded-full bg-[#ecfdf3] px-2 py-0.5 font-medium text-[#079455]">
+                                          {approvedCount} approved
+                                        </span>
+                                      )}
+                                      {passedCount > 0 && (
+                                        <span className="rounded-full bg-[#eff8ff] px-2 py-0.5 font-medium text-[#175cd3]">
+                                          {passedCount} passed
+                                        </span>
+                                      )}
+                                    </span>
+                                  </div>
+                                </td>
+                              </tr>
+                              {/* Child rows (only when expanded) */}
+                              {isExpanded && group.rules.map((rule) => {
+                                const result = atomicResultByRule.get(rule.id)
+                                const isApproved = rule.status === 'APPROVED'
+                                return (
+                                  <tr key={rule.id} className="border-b border-[#edf1f6] align-top last:border-0">
+                                    <td className="px-3 py-3"></td>
+                                    <td className="px-4 py-3">
+                                      <p className="font-medium text-[#172033]">{getAtomicRuleCode(rule)}</p>
+                                      <p className="text-xs text-[#667085]">
+                                        v{rule.atomicVersion ?? 0}
+                                        {rule.llmSection ? ` - ${rule.llmSection}` : ''}
+                                      </p>
+                                    </td>
+                                    <td className="px-4 py-3"><StatusPill value={rule.status} /></td>
+                                    <td className="px-4 py-3"><StatusPill value={result?.llmIsPassing || 'NOT_CHECKED'} /></td>
+                                    <td className="max-w-xs px-4 py-3 text-[#475467]">
+                                      <TextDetails text={getAtomicRuleSummary(rule) || '-'} />
+                                    </td>
+                                    <td className="w-[100px] px-4 py-3">
+                                      <JsonViewButton title={`${getAtomicRuleCode(rule)} JSON`} value={rule.llmOutputJson || rule.content} />
+                                    </td>
+                                    <td className="w-[100px] px-4 py-3">
+                                      <JsonViewButton title={`${getAtomicRuleCode(rule)} Checker`} value={result?.llmReviewEntry || result?.llmFindings} />
+                                    </td>
+                                    <td className="w-[100px] px-4 py-3">
+                                      <Button
+                                        size="sm"
+                                        onClick={() => setConsolidatedRule({
+                                          rule,
+                                          checkerJson: result?.llmReviewEntry || result?.llmFindings,
+                                        })}
+                                      >
+                                        <Columns className="h-3.5 w-3.5" aria-hidden="true" />
+                                        View
+                                      </Button>
+                                    </td>
+                                    <td className="px-4 py-3">
+                                      <div className="flex flex-wrap gap-2">
+                                        <Button
+                                          size="sm"
+                                          onClick={() => approveAtomicMutation.mutate(rule.id)}
+                                          disabled={approveAtomicMutation.isPending || isApproved}
+                                          className={isApproved ? approvedButtonClass : undefined}
+                                        >
+                                          <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+                                          {isApproved ? 'Approved' : 'Approve'}
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          title={!group.parent ? 'Semantic parent not found' : !result ? 'Run atomic checker first' : undefined}
+                                          onClick={() => {
+                                            if (!group.parent) return
+                                            rewriteGroupMutation.mutate({
+                                              atomicRuleId: rule.id,
+                                              semanticRuleId: group.parent.id,
+                                              rewriteMode: 'CHECKER_FEEDBACK',
+                                            })
+                                          }}
+                                          disabled={rewriteGroupMutation.isPending || Boolean(activeJobId) || !group.parent || !result}
+                                        >
+                                          <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+                                          Checker rewrite
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          title={!group.parent ? 'Semantic parent not found' : undefined}
+                                          onClick={() => setHumanRewriteRule(rule)}
+                                          disabled={rewriteGroupMutation.isPending || Boolean(activeJobId) || !group.parent}
+                                        >
+                                          <MessageSquareText className="h-3.5 w-3.5" aria-hidden="true" />
+                                          Human rewrite
+                                        </Button>
+                                        <Button size="sm" onClick={() => openEditDialog(rule)} disabled={editAtomicMutation.isPending}>
+                                          <Edit3 className="h-3.5 w-3.5" aria-hidden="true" />
+                                          Edit
+                                        </Button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )
+                              })}
+                            </React.Fragment>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </StickyScrollX>
+                </>
               )}
             </Panel>
           </div>
