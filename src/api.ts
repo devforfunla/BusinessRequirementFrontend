@@ -300,6 +300,29 @@ export type TestCaseJobResponse = {
   updatedAt?: string | null
 }
 
+function toWorkflowJob(job: TestCaseJobResponse, workflowId: string): AsyncJob {
+  return {
+    id: job.id,
+    batchId: job.batchId,
+    workflowId,
+    jobType: job.jobType,
+    status: normalizeJobStatus(job.status),
+    inputPayload: job.inputPayload,
+    resultPayload: job.resultPayload,
+    errorMessage: job.errorMessage,
+    createdAt: job.createdAt,
+    updatedAt: job.updatedAt,
+  }
+}
+
+function sortJobsByActivityDesc(jobs: AsyncJob[]) {
+  return [...jobs].sort((a, b) => jobActivityTime(b) - jobActivityTime(a))
+}
+
+function jobActivityTime(job: AsyncJob) {
+  return Date.parse(job.updatedAt || job.createdAt || '') || 0
+}
+
 export type TestCaseRewriteMode = 'CHECKER_FEEDBACK' | 'HUMAN_FEEDBACK'
 
 export type TestCaseEditPayload = {
@@ -493,6 +516,20 @@ export const jobsApi = {
         params: { workflowId, jobType },
       }),
     ),
+  listUnifiedByWorkflow: async (workflowId: string) => {
+    const [businessJobs, testCaseJobs] = await Promise.all([
+      jobsApi.listByWorkflow(workflowId),
+      fromResponse<TestCaseJobResponse[]>(
+        testCaseHttp.get('/test-generation/jobs', {
+          params: { sourceWorkflowId: workflowId },
+        }),
+      ),
+    ])
+    return sortJobsByActivityDesc([
+      ...businessJobs.map((job) => ({ ...job, status: normalizeJobStatus(job.status) })),
+      ...testCaseJobs.map((job) => toWorkflowJob(job, workflowId)),
+    ])
+  },
   affectedRules: (jobId: string) =>
     fromResponse<JsonRecord>(http.get(atomicPath(`/jobs/${encodeURIComponent(jobId)}/affected-rules`))),
   changes: (jobId: string) => fromResponse<JsonRecord>(http.get(atomicPath(`/jobs/${encodeURIComponent(jobId)}/changes`))),
@@ -667,6 +704,12 @@ export const testCaseJobsApi = {
         params: { batchId },
       }),
     ),
+  listBySourceWorkflow: (sourceWorkflowId: string) =>
+    fromResponse<TestCaseJobResponse[]>(
+      testCaseHttp.get('/test-generation/jobs', {
+        params: { sourceWorkflowId },
+      }),
+    ),
 }
 
 export const testCasesApi = {
@@ -770,12 +813,19 @@ export const traceLogsApi = {
     fromResponse<JobTraceResponse>(http.get(`/trace/jobs/${encodeURIComponent(jobId)}`)),
 }
 
+export function normalizeJobStatus(status?: string | null) {
+  const normalized = (status || 'UNKNOWN').trim().toUpperCase()
+  return normalized === 'COMPLETED' ? 'SUCCEEDED' : normalized
+}
+
 export function isJobRunning(status?: string | null) {
-  return status === 'QUEUED' || status === 'RUNNING'
+  const normalized = normalizeJobStatus(status)
+  return normalized === 'QUEUED' || normalized === 'RUNNING'
 }
 
 export function isJobDone(status?: string | null) {
-  return status === 'SUCCEEDED' || status === 'FAILED' || status === 'PARTIAL_SUCCESS'
+  const normalized = normalizeJobStatus(status)
+  return normalized === 'SUCCEEDED' || normalized === 'FAILED' || normalized === 'PARTIAL_SUCCESS'
 }
 
 export function getErrorMessage(error: unknown) {

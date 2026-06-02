@@ -132,9 +132,9 @@ export function SemanticStagePage() {
     const semanticJobs = jobs.filter((j) => semanticJobTypes.includes(j.jobType))
     const hasRewrite = semanticJobs.some((j) => j.jobType === 'SEMANTIC_REWRITE' || j.jobType === 'SEMANTIC_EDIT')
     const hasChecker = semanticJobs.some((j) => j.jobType === 'SEMANTIC_CHECKER')
-    if (hasRewrite) setActiveTab('review')
-    else if (hasChecker) setActiveTab('checker')
-    else setActiveTab('maker')
+    const nextTab = hasRewrite ? 'review' : hasChecker ? 'checker' : 'maker'
+    const timer = window.setTimeout(() => setActiveTab(nextTab), 0)
+    return () => window.clearTimeout(timer)
     // Only run on initial load
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobsQuery.data !== undefined])

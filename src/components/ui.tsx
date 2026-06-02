@@ -332,7 +332,7 @@ export function JsonDrawer({
   )
 }
 
-export function colorizeJson(json: string): string {
+function colorizeJson(json: string): string {
   return json
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     // field names: "key":  →  brown/maroon

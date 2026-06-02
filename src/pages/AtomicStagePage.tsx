@@ -1,5 +1,5 @@
 import React, { type ReactNode, useEffect, useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useLocation, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   CheckCircle2,
@@ -35,14 +35,15 @@ import {
   type AsyncJob,
   type AtomicRule,
   type CheckerRun,
+  type ExtractionGroup,
   type JsonRecord,
   type SemanticRule,
 } from '../api'
 import { JobSummaryCard, WorkflowStageJobs } from '../components/WorkflowStageJobs'
 import { WorkflowStagePipeline } from '../components/WorkflowStagePipeline'
+import { colorizeJson } from '../jsonColor'
 import {
   Button,
-  colorizeJson,
   EmptyState,
   ErrorNotice,
   JsonViewButton,
@@ -50,6 +51,7 @@ import {
   PageTitle,
   Panel,
   PanelHeader,
+  Select,
   StatusPill,
   StickyScrollX,
   Tabs,
@@ -77,6 +79,7 @@ const tabDefs: TabItem[] = [
 
 export function AtomicStagePage() {
   const { workflowId = '' } = useParams()
+  const location = useLocation()
   const queryClient = useQueryClient()
   const reviewerId = useAppStore((state) => state.reviewerId)
   const setDocumentId = useAppStore((state) => state.setDocumentId)
@@ -84,6 +87,7 @@ export function AtomicStagePage() {
   const [activeJobId, setActiveJobId] = useState<string | null>(null)
   const [activeGroupJobs, setActiveGroupJobs] = useState<Record<string, string>>({})
   const [activeTab, setActiveTab] = useState<string>('maker')
+  const [selectedExtractionJobId, setSelectedExtractionJobId] = useState('')
   const [humanRewriteRule, setHumanRewriteRule] = useState<AtomicRule | null>(null)
   const [humanFeedback, setHumanFeedback] = useState('')
   const [editRule, setEditRule] = useState<AtomicRule | null>(null)
@@ -147,18 +151,31 @@ export function AtomicStagePage() {
   })
 
   const jobQuery = usePolledJob(activeJobId)
+  const requestedTab = useMemo(() => {
+    const tab = new URLSearchParams(location.search).get('tab')
+    return tabDefs.some((item) => item.id === tab) ? tab : null
+  }, [location.search])
+  const requestedExtractionGroups = location.hash === '#extraction-groups'
+
+  useEffect(() => {
+    const nextTab = requestedTab || (requestedExtractionGroups ? 'maker' : null)
+    if (!nextTab) return
+    const timer = window.setTimeout(() => setActiveTab(nextTab), 0)
+    return () => window.clearTimeout(timer)
+  }, [requestedExtractionGroups, requestedTab])
 
   // Resolve default tab based on pipeline progress
   useEffect(() => {
+    if (requestedTab || requestedExtractionGroups) return
     const jobs = jobsQuery.data || []
     const atomicJobs = jobs.filter((j) => atomicJobTypes.includes(j.jobType))
     const hasRewrite = atomicJobs.some((j) => j.jobType === 'ATOMIC_REWRITE' || j.jobType === 'ATOMIC_REWRITE_CHECKER_FEEDBACK' || j.jobType === 'ATOMIC_REWRITE_HUMAN_FEEDBACK' || j.jobType === 'EDIT')
     const hasChecker = atomicJobs.some((j) => j.jobType === 'ATOMIC_CHECKER')
-    if (hasRewrite) setActiveTab('review')
-    else if (hasChecker) setActiveTab('checker')
-    else setActiveTab('maker')
+    const nextTab = hasRewrite ? 'review' : hasChecker ? 'checker' : 'maker'
+    const timer = window.setTimeout(() => setActiveTab(nextTab), 0)
+    return () => window.clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jobsQuery.data !== undefined])
+  }, [jobsQuery.data !== undefined, requestedExtractionGroups, requestedTab])
 
   useEffect(() => {
     const job = jobQuery.data
@@ -294,11 +311,28 @@ export function AtomicStagePage() {
     ))
   }
 
-  const semanticRules = semanticRulesQuery.data || []
-  const atomicRules = atomicRulesQuery.data || []
+  const semanticRules = useMemo(() => semanticRulesQuery.data ?? [], [semanticRulesQuery.data])
+  const atomicRules = useMemo(() => atomicRulesQuery.data ?? [], [atomicRulesQuery.data])
   const atomicResults = atomicResultsQuery.data || []
-  const extractionGroups = extractionGroupsQuery.data || []
-  const jobs = jobsQuery.data || []
+  const extractionGroups = useMemo(() => extractionGroupsQuery.data ?? [], [extractionGroupsQuery.data])
+  const jobs = useMemo(() => jobsQuery.data ?? [], [jobsQuery.data])
+  const atomicMakerJobs = useMemo(() => jobs.filter((job) => job.jobType === 'ATOMIC_MAKER'), [jobs])
+  const extractionJobOptions = useMemo(
+    () => buildExtractionJobOptions(atomicMakerJobs, extractionGroups),
+    [atomicMakerJobs, extractionGroups],
+  )
+  const visibleExtractionJobId =
+    selectedExtractionJobId && extractionJobOptions.some((option) => option.jobId === selectedExtractionJobId)
+      ? selectedExtractionJobId
+      : extractionJobOptions[0]?.jobId || ''
+  const selectedExtractionGroups = useMemo(
+    () => extractionGroups.filter((group) => group.jobId === visibleExtractionJobId),
+    [extractionGroups, visibleExtractionJobId],
+  )
+  const extractionSummary = useMemo(
+    () => summarizeExtractionGroups(selectedExtractionGroups),
+    [selectedExtractionGroups],
+  )
   const approvedSemanticCount = semanticRules.filter((rule) => rule.approvalStatus === 'APPROVED').length
   const canRunAtomicMaker = semanticRules.length > 0 && approvedSemanticCount === semanticRules.length
   const atomicResultByRule = new Map(atomicResults.map((result) => [result.targetRuleId, result]))
@@ -320,6 +354,14 @@ export function AtomicStagePage() {
   const humanRewriteParent = humanRewriteRule ? findParentSemanticRule(humanRewriteRule, semanticRules) : null
   const firstError =
     workflowQuery.error || jobsQuery.error || semanticRulesQuery.error || atomicRulesQuery.error || atomicRunQuery.error || atomicResultsQuery.error || extractionGroupsQuery.error
+
+  useEffect(() => {
+    if (!requestedExtractionGroups || activeTab !== 'maker') return
+    const timer = window.setTimeout(() => {
+      document.getElementById('extraction-groups')?.scrollIntoView({ block: 'start' })
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [activeTab, requestedExtractionGroups, selectedExtractionGroups.length])
 
   return (
     <div className="space-y-5">
@@ -377,11 +419,33 @@ export function AtomicStagePage() {
 
             {/* Extraction Groups drill-down */}
             {extractionGroups.length > 0 ? (
-              <Panel>
+              <Panel id="extraction-groups" className="scroll-mt-4">
                 <PanelHeader
                   title="Extraction Groups"
-                  description={`${extractionGroups.length} parallel group${extractionGroups.length !== 1 ? 's' : ''}`}
+                  description={`${extractionSummary.total} parallel group${extractionSummary.total !== 1 ? 's' : ''} for selected maker job`}
+                  actions={
+                    <Label label="Maker job">
+                      <Select
+                        value={visibleExtractionJobId}
+                        onChange={(event) => setSelectedExtractionJobId(event.target.value)}
+                        className="w-64 font-mono text-xs"
+                      >
+                        {extractionJobOptions.map((option) => (
+                          <option key={option.jobId} value={option.jobId}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </Select>
+                    </Label>
+                  }
                 />
+                <div className="grid gap-3 border-b border-[#e3e8f0] p-4 sm:grid-cols-2 lg:grid-cols-5">
+                  <ExtractionSummaryMetric label="Status" value={<StatusPill value={extractionSummary.status} />} />
+                  <ExtractionSummaryMetric label="Groups" value={extractionSummary.total} />
+                  <ExtractionSummaryMetric label="Succeeded" value={extractionSummary.succeeded} tone="success" />
+                  <ExtractionSummaryMetric label="Failed" value={extractionSummary.failed} tone={extractionSummary.failed > 0 ? 'danger' : undefined} />
+                  <ExtractionSummaryMetric label="Atomic Rules" value={extractionSummary.atomicRules} />
+                </div>
                 <StickyScrollX>
                   <table className="w-full min-w-[800px] border-collapse text-left text-sm">
                     <thead className="bg-[#f8fafc] text-xs uppercase text-[#667085]">
@@ -395,7 +459,7 @@ export function AtomicStagePage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {extractionGroups.map((group) => (
+                      {selectedExtractionGroups.map((group) => (
                         <tr key={group.id} className="border-b border-[#edf1f6] align-top last:border-0">
                           <td className="px-4 py-3 font-medium text-[#172033]">{group.groupPrefix}</td>
                           <td className="px-4 py-3"><StatusPill value={group.status} /></td>
@@ -1022,6 +1086,89 @@ function atomicJsonField(value: string | null | undefined, fieldName: string) {
   return typeof fieldValue === 'string' && fieldValue.trim() ? fieldValue : null
 }
 
+function ExtractionSummaryMetric({
+  label,
+  value,
+  tone,
+}: {
+  label: string
+  value: ReactNode
+  tone?: 'success' | 'danger'
+}) {
+  return (
+    <div className="min-w-0">
+      <p className="text-xs font-medium uppercase text-[#667085]">{label}</p>
+      <div className={cn(
+        'mt-1 text-sm font-semibold text-[#172033]',
+        tone === 'success' && 'text-[#079455]',
+        tone === 'danger' && 'text-[#b42318]',
+      )}>
+        {value}
+      </div>
+    </div>
+  )
+}
+
+function summarizeExtractionGroups(groups: ExtractionGroup[]) {
+  const failed = groups.filter((group) => group.status === 'FAILED').length
+  const succeeded = groups.filter((group) => group.status === 'SUCCEEDED').length
+  const atomicRules = groups.reduce((sum, group) => sum + (group.atomicRulesCount || 0), 0)
+  const status =
+    groups.length === 0
+      ? 'NOT_STARTED'
+      : failed === 0
+        ? 'SUCCEEDED'
+        : failed === groups.length
+          ? 'FAILED'
+          : 'PARTIAL_SUCCESS'
+
+  return {
+    total: groups.length,
+    succeeded,
+    failed,
+    atomicRules,
+    status,
+  }
+}
+
+function buildExtractionJobOptions(jobs: AsyncJob[], groups: ExtractionGroup[]) {
+  const jobById = new Map(jobs.map((job) => [job.id, job]))
+  const groupCounts = new Map<string, number>()
+  const groupLatestTime = new Map<string, number>()
+  for (const group of groups) {
+    groupCounts.set(group.jobId, (groupCounts.get(group.jobId) || 0) + 1)
+    groupLatestTime.set(group.jobId, Math.max(groupLatestTime.get(group.jobId) || 0, Date.parse(group.createdAt || '') || 0))
+  }
+
+  const ids = new Set<string>()
+  for (const job of jobs) ids.add(job.id)
+  for (const group of groups) ids.add(group.jobId)
+
+  return [...ids]
+    .sort((a, b) => extractionJobTime(b, jobById, groupLatestTime) - extractionJobTime(a, jobById, groupLatestTime))
+    .map((jobId) => {
+      const job = jobById.get(jobId)
+      const groupCount = groupCounts.get(jobId) || 0
+      return {
+        jobId,
+        label: `${shortJobId(jobId)} - ${formatDate(job?.createdAt)} - ${groupCount} groups`,
+      }
+    })
+}
+
+function extractionJobTime(
+  jobId: string,
+  jobById: Map<string, AsyncJob>,
+  groupLatestTime: Map<string, number>,
+) {
+  const job = jobById.get(jobId)
+  return Date.parse(job?.updatedAt || job?.createdAt || '') || groupLatestTime.get(jobId) || 0
+}
+
+function shortJobId(jobId: string) {
+  return jobId.length > 8 ? jobId.slice(0, 8) : jobId
+}
+
 function buildEditableAtomicRule(rule: AtomicRule) {
   const summary = getAtomicRuleSummary(rule) || ''
   return {
@@ -1189,8 +1336,7 @@ function CheckerGroupBreakdown({ jobs }: { jobs: AsyncJob[] }) {
   // Find the latest ATOMIC_CHECKER job with a resultPayload
   const latestCheckerJob = jobs
     .filter((j) => j.jobType === 'ATOMIC_CHECKER' && j.resultPayload)
-    .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
-    [0]
+    .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))[0]
 
   if (!latestCheckerJob?.resultPayload) return null
 

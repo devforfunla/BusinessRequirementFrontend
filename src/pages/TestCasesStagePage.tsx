@@ -113,7 +113,7 @@ export function TestCasesStagePage() {
     enabled: Boolean(workflowId),
   })
 
-  const batches = batchesQuery.data || []
+  const batches = useMemo(() => batchesQuery.data ?? [], [batchesQuery.data])
   const activeBatchId = useMemo(() => {
     if (selectedBatchId && batches.some((batch) => batch.id === selectedBatchId)) return selectedBatchId
     return batches.find((batch) => batch.status === 'ACTIVE')?.id || batches[0]?.id || ''
@@ -121,7 +121,10 @@ export function TestCasesStagePage() {
   const activeBatch = batches.find((batch) => batch.id === activeBatchId) || null
 
   useEffect(() => {
-    if (!selectedBatchId && activeBatchId) setSelectedBatchId(activeBatchId)
+    if (!selectedBatchId && activeBatchId) {
+      const timer = window.setTimeout(() => setSelectedBatchId(activeBatchId), 0)
+      return () => window.clearTimeout(timer)
+    }
   }, [activeBatchId, selectedBatchId])
 
   const jobsQuery = useQuery({
@@ -187,7 +190,7 @@ export function TestCasesStagePage() {
     }
   }, [activeJobQuery.data, queryClient])
 
-  const jobs = jobsQuery.data || []
+  const jobs = useMemo(() => jobsQuery.data ?? [], [jobsQuery.data])
   const semanticRules = semanticRulesQuery.data || []
   const atomicRules = atomicRulesQuery.data || []
   const approvedAtomicRules = atomicRules.filter((rule) => rule.status === 'APPROVED')
@@ -201,10 +204,11 @@ export function TestCasesStagePage() {
     const hasReviewJob = jobs.some((job) => job.jobType === 'TEST_CASE_REWRITE' || job.jobType === 'TEST_CASE_EDIT')
     const hasCheckerJob = jobs.some((job) => job.jobType === 'TEST_CASE_CHECKER')
     const hasMakerJob = jobs.some((job) => job.jobType === 'TEST_CASE_MAKER')
-    if (hasReviewJob) setActiveTab('review')
-    else if (hasCheckerJob) setActiveTab('checker')
-    else if (hasMakerJob) setActiveTab('maker')
-  }, [jobs.length])
+    const nextTab = hasReviewJob ? 'review' : hasCheckerJob ? 'checker' : hasMakerJob ? 'maker' : null
+    if (!nextTab) return
+    const timer = window.setTimeout(() => setActiveTab(nextTab), 0)
+    return () => window.clearTimeout(timer)
+  }, [jobs])
 
   const generateMutation = useMutation({
     mutationFn: () => testCaseMakerApi.generate(workflowId, reviewerId || 'reviewer-poc', batches.length > 0),

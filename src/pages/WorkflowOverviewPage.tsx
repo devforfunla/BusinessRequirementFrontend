@@ -5,6 +5,7 @@ import {
   ArrowRight,
   CheckCircle2,
   ClipboardCheck,
+  Code2,
   FileCode2,
   History,
   Layers,
@@ -12,21 +13,24 @@ import {
   TestTube2,
 } from 'lucide-react'
 import {
+  atomicMakerApi,
   atomicRulesApi,
   getErrorMessage,
   isJobRunning,
   jobsApi,
+  normalizeJobStatus,
   semanticRulesApi,
   workflowsApi,
   type AsyncJob,
   type AtomicRule,
+  type ExtractionGroup,
   type SemanticRule,
 } from '../api'
 import { WorkflowStagePipeline, type WorkflowStage } from '../components/WorkflowStagePipeline'
 import { Button, ErrorNotice, PageTitle, Panel, PanelHeader, StatusPill } from '../components/ui'
 import { useAppStore } from '../store'
 import { cn, formatDate } from '../utils'
-import { latestJob } from '../workflowJobUtils'
+import { deriveStageStatus, latestJob, latestStageJob } from '../workflowJobUtils'
 
 type StageCardDef = {
   id: WorkflowStage
@@ -59,14 +63,21 @@ const stageCards: StageCardDef[] = [
     label: 'Test Case',
     icon: <TestTube2 className="h-5 w-5" />,
     href: (wid) => `/workflows/${encodeURIComponent(wid)}/test-cases`,
-    jobTypes: ['TEST_CASE_MAKER', 'TEST_CASE_CHECKER'],
+    jobTypes: ['TEST_CASE_MAKER', 'TEST_CASE_CHECKER', 'TEST_CASE_REWRITE', 'TEST_CASE_EDIT'],
   },
   {
     id: 'bdd',
     label: 'BDD',
     icon: <FileCode2 className="h-5 w-5" />,
     href: (wid) => `/workflows/${encodeURIComponent(wid)}/test-cases`,
-    jobTypes: ['BDD_MAKER', 'BDD_CHECKER'],
+    jobTypes: ['BDD_MAKER', 'BDD_CHECKER', 'BDD_REWRITE', 'BDD_EDIT'],
+  },
+  {
+    id: 'test-scripts',
+    label: 'Test Script',
+    icon: <Code2 className="h-5 w-5" />,
+    href: (wid) => `/workflows/${encodeURIComponent(wid)}/test-cases`,
+    jobTypes: ['TEST_SCRIPT_MAKER'],
   },
 ]
 
@@ -91,8 +102,8 @@ export function WorkflowOverviewPage() {
   }, [setDocumentId, workflowQuery.data?.documentId])
 
   const jobsQuery = useQuery({
-    queryKey: ['workflow-jobs', workflowId],
-    queryFn: () => jobsApi.listByWorkflow(workflowId),
+    queryKey: ['workflow-jobs-unified', workflowId],
+    queryFn: () => jobsApi.listUnifiedByWorkflow(workflowId),
     enabled: Boolean(workflowId),
     refetchInterval: (query) => {
       const jobs = query.state.data as AsyncJob[] | undefined
@@ -112,11 +123,18 @@ export function WorkflowOverviewPage() {
     enabled: Boolean(workflowId),
   })
 
+  const extractionGroupsQuery = useQuery({
+    queryKey: ['extraction-groups', workflowId],
+    queryFn: () => atomicMakerApi.extractionGroups(workflowId),
+    enabled: Boolean(workflowId),
+  })
+
   const workflow = workflowQuery.data
   const jobs = jobsQuery.data || []
   const semanticRules = semanticRulesQuery.data || []
   const atomicRules = atomicRulesQuery.data || []
-  const firstError = workflowQuery.error || jobsQuery.error
+  const extractionGroups = extractionGroupsQuery.data || []
+  const firstError = workflowQuery.error || jobsQuery.error || extractionGroupsQuery.error
 
   // Determine active stage based on which jobs exist
   const activeStage = resolveActiveStage(jobs)
@@ -169,6 +187,7 @@ export function WorkflowOverviewPage() {
             jobs={jobs}
             semanticRules={semanticRules}
             atomicRules={atomicRules}
+            extractionGroups={extractionGroups}
           />
         ))}
       </div>
@@ -182,17 +201,23 @@ function StageCard({
   jobs,
   semanticRules,
   atomicRules,
+  extractionGroups,
 }: {
   stage: StageCardDef
   workflowId: string
   jobs: AsyncJob[]
   semanticRules: SemanticRule[]
   atomicRules: AtomicRule[]
+  extractionGroups: ExtractionGroup[]
 }) {
   const stageJobs = jobs.filter((j) => stage.jobTypes.includes(j.jobType))
   const hasJobs = stageJobs.length > 0
-  const hasRunning = stageJobs.some((j) => isJobRunning(j.status))
-  const latestMaker = latestJob(stageJobs, stage.jobTypes[0])
+  const latestActivity = latestStageJob(stageJobs)
+  const stageStatus = deriveStageStatus(stageJobs)
+  const stepJobs = buildStepJobs(stage, stageJobs)
+  const atomicExtractionSummary = stage.id === 'atomic'
+    ? summarizeLatestAtomicExtractionGroups(stageJobs, extractionGroups)
+    : null
 
   // Compute stage-specific stats
   let ruleCount = 0
@@ -220,13 +245,7 @@ function StageCard({
             <p className="text-xs text-[#667085]">{stage.group}</p>
           ) : null}
         </div>
-        {hasRunning ? (
-          <StatusPill value="RUNNING" />
-        ) : latestMaker ? (
-          <StatusPill value={latestMaker.status} />
-        ) : (
-          <StatusPill value="NOT_STARTED" />
-        )}
+        <StatusPill value={stageStatus} />
       </div>
 
       <div className="flex flex-1 flex-col gap-3 p-4">
@@ -250,8 +269,23 @@ function StageCard({
         {/* Job summary */}
         <div className="flex flex-wrap gap-2 text-xs text-[#667085]">
           <span>{stageJobs.length} job{stageJobs.length !== 1 ? 's' : ''}</span>
-          {latestMaker ? (
-            <span>Last: {formatDate(latestMaker.updatedAt)}</span>
+          {latestActivity ? (
+            <span>Last: {formatDate(latestActivity.updatedAt || latestActivity.createdAt)}</span>
+          ) : null}
+          {atomicExtractionSummary ? (
+            <Link
+              to={`/workflows/${encodeURIComponent(workflowId)}/atomic?tab=maker#extraction-groups`}
+              className={cn(
+                'inline-flex rounded px-2 py-0.5 font-medium hover:underline',
+                atomicExtractionSummary.failed > 0
+                  ? 'bg-[#fff1f0] text-[#b42318]'
+                  : 'bg-[#ecfdf3] text-[#079455]',
+              )}
+            >
+              {atomicExtractionSummary.failed > 0
+                ? `${atomicExtractionSummary.failed}/${atomicExtractionSummary.total} groups failed`
+                : `${atomicExtractionSummary.succeeded}/${atomicExtractionSummary.total} groups succeeded`}
+            </Link>
           ) : null}
         </div>
 
@@ -262,14 +296,12 @@ function StageCard({
         {/* Steps mini-pipeline */}
         {hasJobs ? (
           <div className="flex items-center gap-1 text-xs">
-            <StepDot label="Maker" job={latestJob(stageJobs, stage.jobTypes[0])} />
-            <span className="text-[#c8d0dc]">&rarr;</span>
-            <StepDot label="Checker" job={latestJob(stageJobs, stage.jobTypes[1])} />
-            <span className="text-[#c8d0dc]">&rarr;</span>
-            <StepDot
-              label="Review"
-              job={latestJob(stageJobs, stage.jobTypes[2]) || latestJob(stageJobs, stage.jobTypes[3])}
-            />
+            {stepJobs.map((step, index) => (
+              <span key={step.label} className="inline-flex items-center gap-1">
+                {index > 0 ? <span className="text-[#c8d0dc]">&rarr;</span> : null}
+                <StepDot label={step.label} job={step.job} />
+              </span>
+            ))}
           </div>
         ) : null}
       </div>
@@ -288,24 +320,56 @@ function StageCard({
 }
 
 function StepDot({ label, job }: { label: string; job?: AsyncJob | null }) {
+  const status = normalizeJobStatus(job?.status)
   const color = !job
     ? 'bg-[#e3e8f0] text-[#98a2b3]'
-    : job.status === 'SUCCEEDED'
+    : status === 'SUCCEEDED'
       ? 'bg-[#ecfdf3] text-[#079455]'
-      : job.status === 'FAILED'
+      : status === 'FAILED'
         ? 'bg-[#fff1f0] text-[#b42318]'
-        : job.status === 'PARTIAL_SUCCESS'
+        : status === 'PARTIAL_SUCCESS'
           ? 'bg-[#fffbeb] text-[#b54708]'
-          : isJobRunning(job.status)
+          : isJobRunning(status)
             ? 'bg-[#eff6ff] text-[#175cd3]'
             : 'bg-[#f8fafc] text-[#475467]'
 
   return (
     <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-medium', color)}>
-      {job?.status === 'SUCCEEDED' ? <CheckCircle2 className="h-3 w-3" /> : null}
+      {status === 'SUCCEEDED' ? <CheckCircle2 className="h-3 w-3" /> : null}
       {label}
     </span>
   )
+}
+
+function buildStepJobs(stage: StageCardDef, stageJobs: AsyncJob[]) {
+  const steps = [{ label: 'Maker', job: latestJob(stageJobs, stage.jobTypes[0]) }]
+  if (stage.jobTypes[1]) {
+    steps.push({ label: 'Checker', job: latestJob(stageJobs, stage.jobTypes[1]) })
+  }
+  const reviewJobTypes = stage.jobTypes.slice(2)
+  if (reviewJobTypes.length > 0) {
+    steps.push({
+      label: 'Review',
+      job: reviewJobTypes.map((jobType) => latestJob(stageJobs, jobType)).find(Boolean) || null,
+    })
+  }
+  return steps
+}
+
+function summarizeLatestAtomicExtractionGroups(stageJobs: AsyncJob[], extractionGroups: ExtractionGroup[]) {
+  const latestMakerJob = latestJob(stageJobs, 'ATOMIC_MAKER')
+  if (!latestMakerJob) return null
+
+  const groups = extractionGroups.filter((group) => group.jobId === latestMakerJob.id)
+  if (groups.length === 0) return null
+
+  const failed = groups.filter((group) => group.status === 'FAILED').length
+  const succeeded = groups.filter((group) => group.status === 'SUCCEEDED').length
+  return {
+    total: groups.length,
+    succeeded,
+    failed,
+  }
 }
 
 function InfoItem({ label, value }: { label: string; value: React.ReactNode }) {
@@ -319,8 +383,9 @@ function InfoItem({ label, value }: { label: string; value: React.ReactNode }) {
 
 function resolveActiveStage(jobs: AsyncJob[]): WorkflowStage {
   const jobTypes = new Set(jobs.map((j) => j.jobType))
-  if (jobTypes.has('BDD_MAKER') || jobTypes.has('BDD_CHECKER')) return 'bdd'
-  if (jobTypes.has('TEST_CASE_MAKER') || jobTypes.has('TEST_CASE_CHECKER')) return 'test-cases'
+  if (jobTypes.has('TEST_SCRIPT_MAKER')) return 'test-scripts'
+  if (jobTypes.has('BDD_MAKER') || jobTypes.has('BDD_CHECKER') || jobTypes.has('BDD_REWRITE') || jobTypes.has('BDD_EDIT')) return 'bdd'
+  if (jobTypes.has('TEST_CASE_MAKER') || jobTypes.has('TEST_CASE_CHECKER') || jobTypes.has('TEST_CASE_REWRITE') || jobTypes.has('TEST_CASE_EDIT')) return 'test-cases'
   if (jobTypes.has('ATOMIC_MAKER') || jobTypes.has('ATOMIC_CHECKER') || jobTypes.has('ATOMIC_REWRITE') || jobTypes.has('ATOMIC_REWRITE_CHECKER_FEEDBACK') || jobTypes.has('ATOMIC_REWRITE_HUMAN_FEEDBACK') || jobTypes.has('EDIT')) return 'atomic'
   return 'semantic'
 }
