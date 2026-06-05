@@ -538,16 +538,16 @@ export const jobsApi = {
 export const workflowsApi = {
   list: (documentId?: string, activeOnly = true) =>
     fromResponse<WorkflowRecord[]>(
-      http.get(atomicPath('/workflows'), {
+      http.get(businessPath('/workflows'), {
         params: { documentId: documentId || undefined, activeOnly },
       }),
     ),
   get: (workflowId: string) =>
-    fromResponse<WorkflowRecord>(http.get(atomicPath(`/workflows/${encodeURIComponent(workflowId)}`))),
+    fromResponse<WorkflowRecord>(http.get(businessPath(`/workflows/${encodeURIComponent(workflowId)}`))),
   history: (workflowId: string) =>
     fromResponse<ChangeHistoryItem[]>(http.get(atomicPath(`/workflows/${encodeURIComponent(workflowId)}/change-history`))),
   activate: (workflowId: string) =>
-    fromResponse<WorkflowRecord>(http.post(atomicPath(`/workflows/${encodeURIComponent(workflowId)}/activate`))),
+    fromResponse<WorkflowRecord>(http.post(businessPath(`/workflows/${encodeURIComponent(workflowId)}/activate`))),
 }
 
 export const semanticMakerApi = {

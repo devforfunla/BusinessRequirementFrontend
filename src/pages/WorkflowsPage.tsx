@@ -29,7 +29,7 @@ export function WorkflowsPage() {
 
   const workflowsQuery = useQuery({
     queryKey: ['workflows', documentFilter],
-    queryFn: () => workflowsApi.list(documentFilter || undefined, false),
+    queryFn: () => (documentFilter ? workflowsApi.list(documentFilter, false) : Promise.resolve([])),
     refetchInterval: 5000,
   })
 
@@ -115,7 +115,7 @@ export function WorkflowsPage() {
                 setSearchParams(event.target.value ? { documentId: event.target.value } : {})
               }}
             >
-              <option value="">All documents</option>
+              <option value="">Select a document</option>
               {documents.map((document) => (
                 <option key={document.id} value={document.id}>
                   {document.fileName} - {document.transformStatus}
