@@ -3,6 +3,7 @@ import { AppShell } from './components/AppShell'
 import { ApprovalPage } from './pages/ApprovalPage'
 import { ApplicationLogsPage } from './pages/ApplicationLogsPage'
 import { AtomicStagePage } from './pages/AtomicStagePage'
+import { BddStagePage } from './pages/BddStagePage'
 import { DocumentsPage } from './pages/DocumentsPage'
 import { HistoryPage } from './pages/HistoryPage'
 import { SemanticGroupPage } from './pages/SemanticGroupPage'
@@ -24,6 +25,7 @@ export default function App() {
         <Route path="/workflows/:workflowId/semantic" element={<SemanticStagePage />} />
         <Route path="/workflows/:workflowId/atomic" element={<AtomicStagePage />} />
         <Route path="/workflows/:workflowId/test-cases" element={<TestCasesStagePage />} />
+        <Route path="/workflows/:workflowId/bdd" element={<BddStagePage />} />
         <Route path="/workflows/:workflowId/semantic/:semanticRuleId" element={<SemanticGroupPage />} />
         <Route path="/workflows/:workflowId/approval" element={<ApprovalPage />} />
         <Route path="/workflows/:workflowId/history" element={<HistoryPage />} />

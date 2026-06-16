@@ -63,20 +63,20 @@ const stageCards: StageCardDef[] = [
     label: 'Test Case',
     icon: <TestTube2 className="h-5 w-5" />,
     href: (wid) => `/workflows/${encodeURIComponent(wid)}/test-cases`,
-    jobTypes: ['TEST_CASE_MAKER', 'TEST_CASE_CHECKER', 'TEST_CASE_REWRITE', 'TEST_CASE_EDIT'],
+    jobTypes: ['TEST_CASE_GENERATION', 'TEST_CASE_CHECKER'],
   },
   {
     id: 'bdd',
     label: 'BDD',
     icon: <FileCode2 className="h-5 w-5" />,
-    href: (wid) => `/workflows/${encodeURIComponent(wid)}/test-cases`,
-    jobTypes: ['BDD_MAKER', 'BDD_CHECKER', 'BDD_REWRITE', 'BDD_EDIT'],
+    href: (wid) => `/workflows/${encodeURIComponent(wid)}/bdd`,
+    jobTypes: ['BDD_GENERATION'],
   },
   {
     id: 'test-scripts',
     label: 'Test Script',
     icon: <Code2 className="h-5 w-5" />,
-    href: (wid) => `/workflows/${encodeURIComponent(wid)}/test-cases`,
+    href: (wid) => `/workflows/${encodeURIComponent(wid)}/bdd`,
     jobTypes: ['TEST_SCRIPT_MAKER'],
   },
 ]
@@ -384,8 +384,8 @@ function InfoItem({ label, value }: { label: string; value: React.ReactNode }) {
 function resolveActiveStage(jobs: AsyncJob[]): WorkflowStage {
   const jobTypes = new Set(jobs.map((j) => j.jobType))
   if (jobTypes.has('TEST_SCRIPT_MAKER')) return 'test-scripts'
-  if (jobTypes.has('BDD_MAKER') || jobTypes.has('BDD_CHECKER') || jobTypes.has('BDD_REWRITE') || jobTypes.has('BDD_EDIT')) return 'bdd'
-  if (jobTypes.has('TEST_CASE_MAKER') || jobTypes.has('TEST_CASE_CHECKER') || jobTypes.has('TEST_CASE_REWRITE') || jobTypes.has('TEST_CASE_EDIT')) return 'test-cases'
+  if (jobTypes.has('BDD_GENERATION')) return 'bdd'
+  if (jobTypes.has('TEST_CASE_GENERATION') || jobTypes.has('TEST_CASE_CHECKER')) return 'test-cases'
   if (jobTypes.has('ATOMIC_MAKER') || jobTypes.has('ATOMIC_CHECKER') || jobTypes.has('ATOMIC_REWRITE') || jobTypes.has('ATOMIC_REWRITE_CHECKER_FEEDBACK') || jobTypes.has('ATOMIC_REWRITE_HUMAN_FEEDBACK') || jobTypes.has('EDIT')) return 'atomic'
   return 'semantic'
 }
