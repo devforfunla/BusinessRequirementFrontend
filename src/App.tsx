@@ -6,6 +6,7 @@ import { AtomicStagePage } from './pages/AtomicStagePage'
 import { BddStagePage } from './pages/BddStagePage'
 import { DocumentsPage } from './pages/DocumentsPage'
 import { HistoryPage } from './pages/HistoryPage'
+import { ReviewWorkbenchPage } from './pages/ReviewWorkbenchPage'
 import { SemanticGroupPage } from './pages/SemanticGroupPage'
 import { SemanticStagePage } from './pages/SemanticStagePage'
 import { SkillsPage } from './pages/SkillsPage'
@@ -25,10 +26,12 @@ export default function App() {
         <Route path="/workflows/:workflowId/semantic" element={<SemanticStagePage />} />
         <Route path="/workflows/:workflowId/atomic" element={<AtomicStagePage />} />
         <Route path="/workflows/:workflowId/test-cases" element={<TestCasesStagePage />} />
-        <Route path="/workflows/:workflowId/bdd" element={<BddStagePage />} />
+        <Route path="/workflows/:workflowId/bdd" element={<ReviewWorkbenchPage />} />
         <Route path="/workflows/:workflowId/semantic/:semanticRuleId" element={<SemanticGroupPage />} />
         <Route path="/workflows/:workflowId/approval" element={<ApprovalPage />} />
         <Route path="/workflows/:workflowId/history" element={<HistoryPage />} />
+        <Route path="/workflows/:workflowId/review-workbench" element={<ReviewWorkbenchPage />} />
+        <Route path="/review-workbench" element={<ReviewWorkbenchPage />} />
         <Route path="/skills" element={<SkillsPage />} />
         <Route path="/application-logs" element={<ApplicationLogsPage />} />
         <Route path="/trace-logs" element={<TraceLogsPage />} />

@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   ClipboardCheck,
   Code2,
+  Eye,
   FileCode2,
   History,
   Layers,
@@ -67,8 +68,8 @@ const stageCards: StageCardDef[] = [
   },
   {
     id: 'bdd',
-    label: 'BDD',
-    icon: <FileCode2 className="h-5 w-5" />,
+    label: 'Review Workbench',
+    icon: <Eye className="h-5 w-5" />,
     href: (wid) => `/workflows/${encodeURIComponent(wid)}/bdd`,
     jobTypes: ['BDD_GENERATION'],
   },
