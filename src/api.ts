@@ -201,6 +201,158 @@ export type AtomicCheckerResult = {
   model?: string | null
 }
 
+export type TcgSourceRuleReference = {
+  atomicRuleId: string
+  ruleId: string
+  versionNumber: number
+}
+
+export type TcgDependencyReference = {
+  id: string
+  category: string
+  title: string
+  version?: string | null
+  sourceLocation?: string | null
+  owningSystem?: string | null
+  owningTeam?: string | null
+  summary?: string | null
+  relevance?: string | null
+  usageRole: string
+}
+
+export type TcgPreferenceReference = {
+  preferenceId: string
+  ownerTeam?: string | null
+  version?: string | null
+  appliesTo?: string | null
+  mandatory?: boolean | null
+  preferenceStatement?: string | null
+  expectedTestCaseTypes?: string[] | null
+  checkerRules?: string[] | null
+  scoringImpact?: string | null
+}
+
+export type TcgGenerationRequest = {
+  workflowId: string
+  sourceRules: TcgSourceRuleReference[]
+  referencePackage?: TcgDependencyReference[]
+  teamPreferences?: TcgPreferenceReference[]
+  generationMode?: string | null
+  reviewerId: string
+}
+
+export type TcgTestIntent = {
+  id: string
+  testIntentId: string
+  workflowId: string
+  generationJobId: string
+  businessCapabilityId?: string | null
+  testLevel: string
+  intentType: string
+  readinessStatus: string
+  blockedReason?: string | null
+  sourceRules?: string | null
+  intentJson: string
+  createdAt?: string | null
+}
+
+export type TcgGeneratedTestCase = {
+  id: string
+  testCaseId: string
+  versionNumber: number
+  isLatest: boolean
+  changeType: string
+  parentVersionId?: string | null
+  revisionJobId?: string | null
+  workflowId: string
+  atomicRuleId: string
+  ruleId: string
+  sourceVersionNumber: number
+  semanticRuleId: string
+  testIntentId?: string | null
+  generationJobId: string
+  title: string
+  scenarioType: string
+  priority: string
+  preconditions?: string | null
+  steps?: string | null
+  expectedResults?: string | null
+  dependencyTraceability?: string | null
+  assumptions?: string | null
+  unsupportedInferences?: string | null
+  openQuestions?: string | null
+  normalizedTestCaseJson?: string | null
+  status: string
+  createdAt?: string | null
+  updatedAt?: string | null
+}
+
+export type TcgCheckerResult = {
+  id: string
+  workflowId: string
+  targetTestCaseId: string
+  atomicRuleId?: string | null
+  testIntentId?: string | null
+  checkerJobId: string
+  isPassing: boolean
+  totalScore: number
+  dimensionScores?: string | null
+  findings?: string | null
+  recommendedActions?: string | null
+  blockingCategory?: string | null
+  benchmarkProfile?: string | null
+  checkedAt?: string | null
+}
+
+export type TcgConfidenceDecision = {
+  id: string
+  workflowId: string
+  targetTestCaseId: string
+  atomicRuleId?: string | null
+  testIntentId?: string | null
+  checkerJobId?: string | null
+  confidenceLevel: string
+  rationale?: string | null
+  reviewerId?: string | null
+  decidedAt?: string | null
+}
+
+export type TcgReviewAction = 'verify' | 'reject' | 'approve'
+
+export type TcgReviewRequest = {
+  body: JsonRecord
+  headers: Record<string, string>
+}
+
+export type BddGenerationRequest = {
+  workflowId: string
+  testCaseIds: string[]
+  generationMode?: string | null
+  reviewerId: string
+}
+
+export type GeneratedBddScenario = {
+  id: string
+  workflowId: string
+  generatedTestCaseId: string
+  atomicRuleId: string
+  ruleId: string
+  sourceVersionNumber: number
+  generationJobId: string
+  featureTitle: string
+  scenarioTitle: string
+  normalizedBdd: string
+  gherkinText: string
+  assumptions?: string | null
+  traceability?: string | null
+  staleAt?: string | null
+  staleReason?: string | null
+  supersededByTestCaseVersionId?: string | null
+  status: string
+  createdAt?: string | null
+  updatedAt?: string | null
+}
+
 export type TestCaseGenerationBatch = {
   id: string
   sourceWorkflowId: string
@@ -298,21 +450,6 @@ export type TestCaseJobResponse = {
   errorMessage?: string | null
   createdAt?: string | null
   updatedAt?: string | null
-}
-
-function toWorkflowJob(job: TestCaseJobResponse, workflowId: string): AsyncJob {
-  return {
-    id: job.id,
-    batchId: job.batchId,
-    workflowId,
-    jobType: job.jobType,
-    status: normalizeJobStatus(job.status),
-    inputPayload: job.inputPayload,
-    resultPayload: job.resultPayload,
-    errorMessage: job.errorMessage,
-    createdAt: job.createdAt,
-    updatedAt: job.updatedAt,
-  }
 }
 
 function sortJobsByActivityDesc(jobs: AsyncJob[]) {
@@ -517,17 +654,9 @@ export const jobsApi = {
       }),
     ),
   listUnifiedByWorkflow: async (workflowId: string) => {
-    const [businessJobs, testCaseJobs] = await Promise.all([
-      jobsApi.listByWorkflow(workflowId),
-      fromResponse<TestCaseJobResponse[]>(
-        testCaseHttp.get('/test-generation/jobs', {
-          params: { sourceWorkflowId: workflowId },
-        }),
-      ),
-    ])
+    const businessJobs = await jobsApi.listByWorkflow(workflowId)
     return sortJobsByActivityDesc([
       ...businessJobs.map((job) => ({ ...job, status: normalizeJobStatus(job.status) })),
-      ...testCaseJobs.map((job) => toWorkflowJob(job, workflowId)),
     ])
   },
   affectedRules: (jobId: string) =>
@@ -538,16 +667,16 @@ export const jobsApi = {
 export const workflowsApi = {
   list: (documentId?: string, activeOnly = true) =>
     fromResponse<WorkflowRecord[]>(
-      http.get(atomicPath('/workflows'), {
+      http.get(businessPath('/workflows'), {
         params: { documentId: documentId || undefined, activeOnly },
       }),
     ),
   get: (workflowId: string) =>
-    fromResponse<WorkflowRecord>(http.get(atomicPath(`/workflows/${encodeURIComponent(workflowId)}`))),
+    fromResponse<WorkflowRecord>(http.get(businessPath(`/workflows/${encodeURIComponent(workflowId)}`))),
   history: (workflowId: string) =>
     fromResponse<ChangeHistoryItem[]>(http.get(atomicPath(`/workflows/${encodeURIComponent(workflowId)}/change-history`))),
   activate: (workflowId: string) =>
-    fromResponse<WorkflowRecord>(http.post(atomicPath(`/workflows/${encodeURIComponent(workflowId)}/activate`))),
+    fromResponse<WorkflowRecord>(http.post(businessPath(`/workflows/${encodeURIComponent(workflowId)}/activate`))),
 }
 
 export const semanticMakerApi = {
@@ -668,6 +797,39 @@ export const atomicCheckerApi = {
     fromResponse<AtomicCheckerResult[]>(http.get(atomicPath(`/checker/workflow/${encodeURIComponent(workflowId)}/latest-results`))),
   latestResultByRule: (ruleId: string) =>
     optionalFromResponse<AtomicCheckerResult>(http.get(atomicPath(`/checker/rules/${encodeURIComponent(ruleId)}/latest-result`))),
+}
+
+export const tcgApi = {
+  submitGenerationJob: (payload: TcgGenerationRequest) =>
+    fromResponse<JobResponse>(http.post(businessPath('/test-case-generation-jobs'), payload)),
+  generationJob: (jobId: string) =>
+    fromResponse<AsyncJob>(http.get(businessPath(`/test-case-generation-jobs/${encodeURIComponent(jobId)}`))),
+  testIntentsByWorkflow: (workflowId: string) =>
+    fromResponse<TcgTestIntent[]>(http.get(businessPath(`/workflows/${encodeURIComponent(workflowId)}/test-intents`))),
+  testCasesByWorkflow: (workflowId: string) =>
+    fromResponse<TcgGeneratedTestCase[]>(http.get(businessPath(`/workflows/${encodeURIComponent(workflowId)}/test-cases`))),
+  checkerResults: (testCaseVersionId: string) =>
+    fromResponse<TcgCheckerResult[]>(http.get(businessPath(`/test-cases/${encodeURIComponent(testCaseVersionId)}/checker-results`))),
+  confidenceDecisions: (testCaseVersionId: string) =>
+    fromResponse<TcgConfidenceDecision[]>(
+      http.get(businessPath(`/test-cases/${encodeURIComponent(testCaseVersionId)}/confidence-decisions`)),
+    ),
+  reviewTestCase: (versionId: string, action: TcgReviewAction, request: TcgReviewRequest) =>
+    fromResponse<TcgGeneratedTestCase>(
+      http.post(businessPath(`/test-cases/${encodeURIComponent(versionId)}/${action}`), request.body, {
+        headers: request.headers,
+      }),
+    ),
+  submitBddGenerationJob: (payload: BddGenerationRequest) =>
+    fromResponse<JobResponse>(http.post(businessPath('/bdd-generation-jobs'), payload)),
+  bddGenerationJob: (jobId: string) =>
+    fromResponse<AsyncJob>(http.get(businessPath(`/bdd-generation-jobs/${encodeURIComponent(jobId)}`))),
+  bddScenariosByWorkflow: (workflowId: string) =>
+    fromResponse<GeneratedBddScenario[]>(http.get(businessPath(`/workflows/${encodeURIComponent(workflowId)}/bdd-scenarios`))),
+  bddScenariosByTestCase: (testCaseVersionId: string) =>
+    fromResponse<GeneratedBddScenario[]>(
+      http.get(businessPath(`/test-cases/${encodeURIComponent(testCaseVersionId)}/bdd-scenarios`)),
+    ),
 }
 
 export const testCaseMakerApi = {

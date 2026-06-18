@@ -38,9 +38,8 @@ export function WorkflowStagePipeline({ workflowId, activeStage }: { workflowId:
           const isActive = stage.id === activeStage
           const isComplete = index < activeIndex
           const isReached = index <= activeIndex
-          // BDD and test-scripts routes don't exist yet — link to test-cases as placeholder
-          const href = stage.id === 'bdd' || stage.id === 'test-scripts'
-            ? `/workflows/${encodeURIComponent(workflowId)}/test-cases`
+          const href = stage.id === 'test-scripts'
+            ? `/workflows/${encodeURIComponent(workflowId)}/bdd`
             : `/workflows/${encodeURIComponent(workflowId)}/${stage.id}`
 
           return (

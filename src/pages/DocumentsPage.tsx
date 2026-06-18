@@ -57,7 +57,7 @@ export function DocumentsPage() {
   const documents = documentsQuery.data || []
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5" suppressHydrationWarning>
       <PageTitle
         title="Documents"
         description="Upload source material, transform it to markdown, and start semantic analysis from a completed document."

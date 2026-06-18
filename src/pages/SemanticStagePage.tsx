@@ -112,6 +112,16 @@ export function SemanticStagePage() {
     enabled: Boolean(workflowId),
   })
 
+  // When SEMANTIC_MAKER job completes (user may have started from documents page),
+  // refetch semantic rules so the list updates without manual refresh
+  useEffect(() => {
+    const jobs = jobsQuery.data || []
+    const makerJob = jobs.find((j) => j.jobType === 'SEMANTIC_MAKER')
+    if (makerJob && (makerJob.status === 'SUCCEEDED' || makerJob.status === 'PARTIAL_SUCCESS')) {
+      void queryClient.invalidateQueries({ queryKey: semanticRulesQueryKey })
+    }
+  }, [jobsQuery.data, queryClient, semanticRulesQueryKey])
+
   const semanticRunQuery = useQuery({
     queryKey: ['semantic-checker-run', workflowId],
     queryFn: () => semanticCheckerApi.latestRun(workflowId),
