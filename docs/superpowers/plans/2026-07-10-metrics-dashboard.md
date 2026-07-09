@@ -156,10 +156,10 @@ export function MetricsPage() {
     const p = { ...tokenParams }
     // Remove empty strings so undefined params are omitted from the request
     const cleaned: TokenCostParams = {}
-    if (p.workflowId) cleaned.workflowId = p.workflowId
-    if (p.jobId) cleaned.jobId = p.jobId
-    if (p.from) cleaned.from = p.from
-    if (p.to) cleaned.to = p.to
+    if (p.workflowId?.trim()) cleaned.workflowId = p.workflowId.trim()
+    if (p.jobId?.trim()) cleaned.jobId = p.jobId.trim()
+    if (p.from?.trim()) cleaned.from = p.from.trim()
+    if (p.to?.trim()) cleaned.to = p.to.trim()
     setSubmittedParams(Object.keys(cleaned).length > 0 ? cleaned : null)
   }
 
@@ -521,7 +521,7 @@ Expected: only pre-existing errors in other files. 19 tests pass.
 
 Prerequisites: BusinessRule backend on port 8082 with the metrics endpoints deployed.
 
-1. Open `http://localhost:5176/metrics`
+1. Open `http://localhost:5173/metrics` (or whichever port `npm run dev` assigns)
 2. **Token Usage:** Enter a workflow ID (e.g. `WF-2026-0709-001`) and click Search. Verify the 5 metric cards populate with real token data.
 3. **Token Usage:** Try date range only (`from`/`to`). Verify cards show data.
 4. **Token Usage:** Click Search with all empty filters. Verify nothing happens (empty state remains).
