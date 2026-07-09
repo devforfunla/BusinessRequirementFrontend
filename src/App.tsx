@@ -3,10 +3,10 @@ import { AppShell } from './components/AppShell'
 import { ApprovalPage } from './pages/ApprovalPage'
 import { ApplicationLogsPage } from './pages/ApplicationLogsPage'
 import { AtomicStagePage } from './pages/AtomicStagePage'
-import { BddStagePage } from './pages/BddStagePage'
 import { DocumentsPage } from './pages/DocumentsPage'
 import { HistoryPage } from './pages/HistoryPage'
 import { KnowledgeBasePage } from './pages/KnowledgeBasePage'
+import { MetricsPage } from './pages/MetricsPage'
 import { ReviewWorkbenchPage } from './pages/ReviewWorkbenchPage'
 import { SemanticGroupPage } from './pages/SemanticGroupPage'
 import { SemanticStagePage } from './pages/SemanticStagePage'
@@ -37,6 +37,7 @@ export default function App() {
         <Route path="/skills" element={<SkillsPage />} />
         <Route path="/application-logs" element={<ApplicationLogsPage />} />
         <Route path="/trace-logs" element={<TraceLogsPage />} />
+        <Route path="/metrics" element={<MetricsPage />} />
       </Route>
     </Routes>
   )
