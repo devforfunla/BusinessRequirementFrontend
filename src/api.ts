@@ -997,6 +997,50 @@ export const traceLogsApi = {
     fromResponse<JobTraceResponse>(http.get(`/trace/jobs/${encodeURIComponent(jobId)}`)),
 }
 
+// ---------------------------------------------------------------------------
+// Metrics API
+// ---------------------------------------------------------------------------
+
+export type TokenCostParams = {
+  workflowId?: string
+  jobId?: string
+  from?: string
+  to?: string
+}
+
+export type TokenCostResponse = {
+  filters: {
+    workflowId: string | null
+    jobId: string | null
+    from: string | null
+    to: string | null
+  }
+  metrics: {
+    llmCallCount: number
+    toolCallCount: number
+    llmPromptTokens: number
+    llmCompletionTokens: number
+    toolPromptTokens: number
+    toolCompletionTokens: number
+  }
+}
+
+export type CheckerPassRateResponse = {
+  workflowId: string
+  totalRulesExtracted: number
+  rulesPassedCheck: number
+  passRate: number
+}
+
+export const metricsApi = {
+  tokenCost: (params: TokenCostParams) =>
+    fromResponse<TokenCostResponse>(http.get('/metrics/token-cost', { params })),
+  checkerPassRate: (workflowId: string) =>
+    fromResponse<CheckerPassRateResponse>(
+      http.get('/metrics/checker-pass-rate', { params: { workflowId } }),
+    ),
+}
+
 export function normalizeJobStatus(status?: string | null) {
   const normalized = (status || 'UNKNOWN').trim().toUpperCase()
   return normalized === 'COMPLETED' ? 'SUCCEEDED' : normalized
