@@ -66,7 +66,7 @@ Split 2-column grid on desktop (`lg:grid-cols-2`), stacked on mobile. Each panel
 - From date (text input, placeholder `YYYY-MM-DD`)
 - To date (text input, placeholder `YYYY-MM-DD`)
 
-**Metric Cards** — 6 cards in a 2×3 grid:
+**Metric Cards** — 5 cards in a flexible grid (2 columns):
 
 | Card | Value | Source |
 |------|-------|--------|
@@ -75,9 +75,10 @@ Split 2-column grid on desktop (`lg:grid-cols-2`), stacked on mobile. Each panel
 | **Tool Tokens** | `toolPrompt + toolCompletion` | FE calculation |
 | **LLM Calls** | `metrics.llmCallCount` | API |
 | **Tool Calls** | `metrics.toolCallCount` | API |
-| **Prompt / Completion** | `metrics.llmPromptTokens` / `metrics.llmCompletionTokens` | API — shown as a ratio or two sub-values |
+| **Prompt / Completion** | `metrics.llmPromptTokens` / `metrics.llmCompletionTokens` | API — shown as two sub-labels in one card: "Prompt: 1.52M / Completion: 289K" |
+| **Job/Tool Calls** | `metrics.llmCallCount`, `metrics.toolCallCount` | API — shown as two sub-labels in one card: "LLM: 85 / Tool: 23" |
 
-Token values formatted: ≥1M → `1.52M`, ≥1K → `289K`, else raw. Use `formatBytes`-style formatting or a simple `formatLargeNumber()` helper.
+Token values formatted: ≥1M → `1.52M`, ≥1K → `289K`, else raw. Formatting handled by a `formatLargeNumber()` helper defined inline in `MetricsPage.tsx`.
 
 **States:**
 - No search yet → `EmptyState` "Enter filters and click Search"
@@ -149,7 +150,7 @@ export type CheckerPassRateResponse = {
 
 - `npm run lint` — zero new errors in touched files
 - `npm run build` — zero errors from touched files
-- `npm test` — 19 existing vitest tests still pass
+- `npm test` — 19 existing vitest tests still pass (vitest is configured on this branch)
 - Manual smoke: enter workflow/date filters on Token Usage panel, verify cards populate; enter workflow ID on Checker Pass Rate panel, verify pass rate displays with correct color
 
 ## 7. Out of Scope
