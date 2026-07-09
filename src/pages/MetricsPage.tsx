@@ -17,6 +17,23 @@ export function MetricsPage() {
 
   const tokenData = tokenQuery.data
 
+  // Checker Pass Rate state
+  const [checkerWorkflowId, setCheckerWorkflowId] = useState('')
+  const [submittedCheckerWfId, setSubmittedCheckerWfId] = useState('')
+
+  const checkerQuery = useQuery({
+    queryKey: ['metrics-checker-pass-rate', submittedCheckerWfId],
+    queryFn: () => metricsApi.checkerPassRate(submittedCheckerWfId),
+    enabled: Boolean(submittedCheckerWfId),
+  })
+
+  const checkerData = checkerQuery.data
+
+  function handleCheckerSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setSubmittedCheckerWfId(checkerWorkflowId.trim())
+  }
+
   function handleTokenSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const p = { ...tokenParams }
@@ -114,6 +131,43 @@ export function MetricsPage() {
             </div>
           ) : null}
         </Panel>
+
+        {/* Checker Pass Rate Panel */}
+        <Panel>
+          <PanelHeader title="Checker Pass Rate" description="Rule checker validation results by workflow." />
+          <form onSubmit={handleCheckerSubmit} className="space-y-3 p-4">
+            <Label label="Workflow ID">
+              <TextInput
+                className="font-mono"
+                placeholder="e.g. WF-2026-0709-001"
+                value={checkerWorkflowId}
+                onChange={(e) => setCheckerWorkflowId(e.target.value)}
+              />
+            </Label>
+            <Button type="submit" variant="primary" disabled={!checkerWorkflowId.trim() || checkerQuery.isFetching}>
+              <Search className="h-4 w-4" aria-hidden="true" />
+              Search
+            </Button>
+          </form>
+
+          {!submittedCheckerWfId ? (
+            <div className="p-4 pt-0">
+              <EmptyState title="Enter a workflow ID and click Search" />
+            </div>
+          ) : checkerQuery.isError ? (
+            <div className="p-4 pt-0">
+              <ErrorNotice message={getErrorMessage(checkerQuery.error)} />
+            </div>
+          ) : checkerData ? (
+            <div className="grid grid-cols-1 gap-3 p-4 pt-0">
+              <PassRateCard rate={checkerData.passRate} />
+              <div className="grid grid-cols-2 gap-3">
+                <MetricCard label="Total Rules" value={checkerData.totalRulesExtracted} />
+                <MetricCard label="Rules Passed" value={checkerData.rulesPassedCheck} />
+              </div>
+            </div>
+          ) : null}
+        </Panel>
       </div>
     </div>
   )
@@ -134,6 +188,20 @@ function MetricCard({
         {value}
       </div>
       <div className="mt-1 text-xs text-[#667085]">{label}</div>
+    </div>
+  )
+}
+
+function PassRateCard({ rate }: { rate: number }) {
+  const colorClass =
+    rate >= 90 ? 'border-[#9bd4b5] bg-[#ecfdf3] text-[#067647]'
+    : rate >= 70 ? 'border-[#f5c97a] bg-[#fffbeb] text-[#b54708]'
+    : 'border-[#f7b4ae] bg-[#fff1f0] text-[#b42318]'
+
+  return (
+    <div className={`rounded-md border px-4 py-6 text-center ${colorClass}`}>
+      <div className="text-3xl font-bold">{rate.toFixed(1)}%</div>
+      <div className="mt-1 text-xs opacity-70">Pass Rate</div>
     </div>
   )
 }
