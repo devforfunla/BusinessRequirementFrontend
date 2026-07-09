@@ -1750,20 +1750,20 @@ function LlmTraceButton({ jobId }: { jobId: string }) {
                       <h3 className="mb-2 text-sm font-medium text-[#475467]">
                         Session #{si + 1} — {s.session.finalStatus} — {s.session.totalTokens ?? 0} tokens
                       </h3>
-                      {s.llmCalls.map((call, ci) => (
+                      {s.llmCalls.map((trace, ci) => (
                         <details key={ci} className="mb-3 rounded-md border border-[#e3e8f0]">
                           <summary className="cursor-pointer bg-[#f8fafc] px-3 py-2 text-xs font-medium text-[#475467]">
-                            Call #{ci + 1} — {call.model} — {call.status}
-                            {call.promptTokens != null ? ` — ${call.promptTokens}+${call.completionTokens ?? 0} tokens` : ''}
+                            Call #{ci + 1} — {trace.call.model} — {trace.call.status}
+                            {trace.call.promptTokens != null ? ` — ${trace.call.promptTokens}+${trace.call.completionTokens ?? 0} tokens` : ''}
                           </summary>
                           <div className="p-3 space-y-3">
                             <div>
                               <p className="mb-1 text-xs font-semibold text-[#667085]">LLM Input (Prompt)</p>
-                              <pre className="max-h-96 overflow-auto rounded-md bg-[#f8fafc] p-3 text-xs text-[#24292f] whitespace-pre-wrap break-all">{call.prompt}</pre>
+                              <pre className="max-h-96 overflow-auto rounded-md bg-[#f8fafc] p-3 text-xs text-[#24292f] whitespace-pre-wrap break-all">{trace.call.prompt}</pre>
                             </div>
                             <div>
                               <p className="mb-1 text-xs font-semibold text-[#667085]">LLM Output (Response)</p>
-                              <pre className="max-h-96 overflow-auto rounded-md bg-[#f8fafc] p-3 text-xs text-[#24292f] whitespace-pre-wrap break-all">{call.response || '(no response)'}</pre>
+                              <pre className="max-h-96 overflow-auto rounded-md bg-[#f8fafc] p-3 text-xs text-[#24292f] whitespace-pre-wrap break-all">{trace.call.response || '(no response)'}</pre>
                             </div>
                           </div>
                         </details>
@@ -1773,19 +1773,19 @@ function LlmTraceButton({ jobId }: { jobId: string }) {
                   {traceQuery.data.unscopedLlmCalls.length > 0 && (
                     <div>
                       <h3 className="mb-2 text-sm font-medium text-[#475467]">Unscoped Calls</h3>
-                      {traceQuery.data.unscopedLlmCalls.map((call, ci) => (
+                      {traceQuery.data.unscopedLlmCalls.map((trace, ci) => (
                         <details key={ci} className="mb-3 rounded-md border border-[#e3e8f0]">
                           <summary className="cursor-pointer bg-[#f8fafc] px-3 py-2 text-xs font-medium text-[#475467]">
-                            Call #{ci + 1} — {call.model} — {call.status}
+                            Call #{ci + 1} — {trace.call.model} — {trace.call.status}
                           </summary>
                           <div className="p-3 space-y-3">
                             <div>
                               <p className="mb-1 text-xs font-semibold text-[#667085]">LLM Input</p>
-                              <pre className="max-h-96 overflow-auto rounded-md bg-[#f8fafc] p-3 text-xs text-[#24292f] whitespace-pre-wrap break-all">{call.prompt}</pre>
+                              <pre className="max-h-96 overflow-auto rounded-md bg-[#f8fafc] p-3 text-xs text-[#24292f] whitespace-pre-wrap break-all">{trace.call.prompt}</pre>
                             </div>
                             <div>
                               <p className="mb-1 text-xs font-semibold text-[#667085]">LLM Output</p>
-                              <pre className="max-h-96 overflow-auto rounded-md bg-[#f8fafc] p-3 text-xs text-[#24292f] whitespace-pre-wrap break-all">{call.response || '(no response)'}</pre>
+                              <pre className="max-h-96 overflow-auto rounded-md bg-[#f8fafc] p-3 text-xs text-[#24292f] whitespace-pre-wrap break-all">{trace.call.response || '(no response)'}</pre>
                             </div>
                           </div>
                         </details>

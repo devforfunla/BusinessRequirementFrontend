@@ -580,16 +580,38 @@ export type LlmCallAudit = {
   createdAt?: string | null
 }
 
+export type ToolCallAudit = {
+  id: string
+  agentSessionId?: string | null
+  llmCallId?: string | null
+  workflowId?: string | null
+  jobId?: string | null
+  jobType: string
+  iterationRound?: number | null
+  toolName: string
+  requestJson: string
+  responseJson?: string | null
+  status: string
+  durationMs?: number | null
+  errorMessage?: string | null
+  createdAt: string
+}
+
+export type LlmCallTrace = {
+  call: LlmCallAudit
+  toolCalls: ToolCallAudit[]
+}
+
 export type AgentTrace = {
   session: LlmAgentSession
-  llmCalls: LlmCallAudit[]
+  llmCalls: LlmCallTrace[]
 }
 
 export type JobTraceResponse = {
   job: AsyncJob
   workflow?: WorkflowTraceRecord | null
   agentSessions: AgentTrace[]
-  unscopedLlmCalls: LlmCallAudit[]
+  unscopedLlmCalls: LlmCallTrace[]
 }
 
 const http = axios.create({
@@ -1034,4 +1056,51 @@ function semanticJsonField(value: string | null | undefined, fieldName: string) 
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
   const fieldValue = (parsed as JsonRecord)[fieldName]
   return typeof fieldValue === 'string' && fieldValue.trim() ? fieldValue : null
+}
+
+// ---------------------------------------------------------------------------
+// Knowledge Base API (separate backend on port 8080, REST root /api/documents)
+// ---------------------------------------------------------------------------
+
+const kbHttp = axios.create({
+  baseURL: '/kb-api',
+  headers: { Accept: 'application/json' },
+})
+
+export type KbDocumentStatus = 'ingesting' | 'active' | 'failed' | 'outdated' | 'archived'
+
+export type KbDocument = {
+  id: number
+  name: string
+  docType?: string | null
+  status: KbDocumentStatus
+  version?: string | null
+  pageCount?: number | null
+  fileName?: string | null
+  fileSize?: number | null
+  uploadedAt: string
+  indexedAt?: string | null
+}
+
+export type KbSectionRef = { sectionId: number }
+export type KbDocumentOutline = KbSectionRef[]
+
+export const knowledgeBaseApi = {
+  list: (status?: KbDocumentStatus) =>
+    fromResponse<KbDocument[]>(kbHttp.get('/documents', { params: { status } })),
+  outline: (id: number) =>
+    fromResponse<KbDocumentOutline>(kbHttp.get(`/documents/${encodeURIComponent(id)}/outline`)),
+  upload: (file: File) => {
+    const body = new FormData()
+    body.append('file', file)
+    return fromResponse<KbDocument>(
+      kbHttp.post('/documents', body, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      }),
+    )
+  },
+  updateVersionStatus: (id: number, status: 'outdated' | 'archived') =>
+    fromResponse<KbDocument>(kbHttp.put(`/documents/${encodeURIComponent(id)}/version`, { status })),
+  delete: (id: number) =>
+    optionalFromResponse<void>(kbHttp.delete(`/documents/${encodeURIComponent(id)}`)),
 }

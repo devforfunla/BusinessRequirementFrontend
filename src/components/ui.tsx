@@ -217,13 +217,13 @@ export function Label({ label, children }: { label: string; children: ReactNode 
 export function StatusPill({ value }: { value?: string | null }) {
   const normalized = value || 'UNKNOWN'
   const style =
-    normalized === 'SUCCEEDED' || normalized === 'COMPLETED' || normalized === 'APPROVED' || normalized === 'PASSED' || normalized === 'Transformed'
+    normalized === 'SUCCEEDED' || normalized === 'COMPLETED' || normalized === 'APPROVED' || normalized === 'PASSED' || normalized === 'Transformed' || normalized === 'ACTIVE'
       ? 'border-[#9bd4b5] bg-[#ecfdf3] text-[#067647]'
       : normalized === 'FAILED' || normalized === 'REJECTED' || normalized === 'BLOCKED' || normalized === 'ERROR' || normalized === 'Transform Failed'
         ? 'border-[#f7b4ae] bg-[#fff1f0] text-[#b42318]'
         : normalized === 'PARTIAL_SUCCESS' || normalized === 'WARNED'
           ? 'border-[#f5c97a] bg-[#fffbeb] text-[#b54708]'
-          : normalized === 'RUNNING' || normalized === 'PROCESSING' || normalized === 'QUEUED' || normalized === 'DRAFT' || normalized === 'Transforming'
+          : normalized === 'RUNNING' || normalized === 'PROCESSING' || normalized === 'QUEUED' || normalized === 'DRAFT' || normalized === 'Transforming' || normalized === 'INGESTING'
             ? 'border-[#b8ccf0] bg-[#eff6ff] text-[#175cd3]'
             : normalized === 'Uploaded'
               ? 'border-[#d8c4f7] bg-[#f5f0ff] text-[#6b21a8]'

@@ -6,6 +6,7 @@ import { AtomicStagePage } from './pages/AtomicStagePage'
 import { BddStagePage } from './pages/BddStagePage'
 import { DocumentsPage } from './pages/DocumentsPage'
 import { HistoryPage } from './pages/HistoryPage'
+import { KnowledgeBasePage } from './pages/KnowledgeBasePage'
 import { ReviewWorkbenchPage } from './pages/ReviewWorkbenchPage'
 import { SemanticGroupPage } from './pages/SemanticGroupPage'
 import { SemanticStagePage } from './pages/SemanticStagePage'
@@ -21,6 +22,7 @@ export default function App() {
       <Route element={<AppShell />}>
         <Route path="/" element={<Navigate to="/documents" replace />} />
         <Route path="/documents" element={<DocumentsPage />} />
+        <Route path="/knowledge-base" element={<KnowledgeBasePage />} />
         <Route path="/workflows" element={<WorkflowsPage />} />
         <Route path="/workflows/:workflowId" element={<WorkflowOverviewPage />} />
         <Route path="/workflows/:workflowId/semantic" element={<SemanticStagePage />} />

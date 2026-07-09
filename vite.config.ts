@@ -8,13 +8,18 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:8081',
+        target: 'http://localhost:8082',
         changeOrigin: true,
       },
       '/testcase-api': {
-        target: 'http://localhost:8081',
+        target: 'http://localhost:8082',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/testcase-api/, '/api'),
+      },
+      '/kb-api': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/kb-api/, '/api'),
       },
     },
   },
