@@ -126,21 +126,12 @@ export type KbDocument = {
   indexedAt?: string | null
 }
 
-export type KbDocumentStatusResponse = {
-  status: KbDocumentStatus
-  indexedAt?: string | null
-}
-
 export type KbSectionRef = { sectionId: number }
 export type KbDocumentOutline = KbSectionRef[]
 
 export const knowledgeBaseApi = {
   list: (status?: KbDocumentStatus) =>
     fromResponse<KbDocument[]>(kbHttp.get('/documents', { params: { status } })),
-  get: (id: number) =>
-    fromResponse<KbDocument>(kbHttp.get(`/documents/${encodeURIComponent(id)}`)),
-  status: (id: number) =>
-    fromResponse<KbDocumentStatusResponse>(kbHttp.get(`/documents/${encodeURIComponent(id)}/status`)),
   outline: (id: number) =>
     fromResponse<KbDocumentOutline>(kbHttp.get(`/documents/${encodeURIComponent(id)}/outline`)),
   upload: (file: File) => {
@@ -211,11 +202,14 @@ Table columns:
 | Status | `status` | `StatusPill` with extended color mapping (see 4.7). |
 | Size | `fileSize` | `formatBytes` helper (already in `src/utils.ts`). |
 | Pages | `pageCount` | `-` if null. |
-| Version | `version` | `-` if null. |
 | Uploaded | `uploadedAt` | `formatDate` helper. |
 | Actions | - | See 4.8. |
 
+The `version` and `docType` fields are not displayed because the upload form (file-only) never sets them, so they would always be null/`-`. They can be added back if a future BE change populates them.
+
 Clicking anywhere on a row toggles the inline outline panel for that row (in addition to the explicit "View outline" button in Actions). The outline panel renders below the row, spanning all columns.
+
+Row action buttons must call `event.stopPropagation()` on click so they don't also toggle the outline panel. Standard React pattern; applies to all four action buttons.
 
 Outline panel content:
 - If `status` is `active` or `archived`: shows "{N} sections created" and a horizontally-scrollable list of section IDs from `outlineQuery.data`.
@@ -334,7 +328,7 @@ Query key convention: `['kb-documents', statusFilter]` and `['kb-document-outlin
 - **Delete an `ingesting` doc:** BE allows it. The async ingestion task will fail or no-op when it tries to mark the deleted doc. UI permits it - no extra guard. The next poll shows the doc gone.
 - **Upload while a previous upload is in flight:** Upload button disabled while `uploadMutation.isPending`. No queueing (single-flight).
 - **Outline query for a doc that transitions to `failed` before the response:** The "View outline" button is disabled for non-`active`/non-`archived` docs, so the query won't fire from a fresh click. If the user expanded a doc and it then transitions to `failed`, the outline query may return an empty array or 404 - render the empty/error state gracefully inside the panel.
-- **`indexedAt` null:** For `ingesting`/`failed` docs, the "Indexed" column (if shown - actually folded into "Uploaded" area in this design; see table columns) shows `-`.
+- **`indexedAt` null:** For `ingesting`/`failed` docs, `indexedAt` is null. The page fetches but does not display `indexedAt` in the table; if it is later shown in the outline panel or elsewhere, it should render as `-` when null.
 - **Filtering hides an expanded doc:** If the user has doc A's outline expanded, then changes the filter so doc A is no longer in the list, the row disappears and `expandedDocId` becomes stale. The outline query is `enabled: expandedDocId !== null` and will keep returning data, but no panel renders because the row is gone. This is harmless; when the user changes the filter back, the panel reappears with cached data. No explicit cleanup needed.
 
 ### 4.12 File map
