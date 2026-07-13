@@ -219,7 +219,7 @@ export function StatusPill({ value }: { value?: string | null }) {
   const style =
     normalized === 'SUCCEEDED' || normalized === 'COMPLETED' || normalized === 'APPROVED' || normalized === 'PASSED' || normalized === 'Transformed' || normalized === 'ACTIVE'
       ? 'border-[#9bd4b5] bg-[#ecfdf3] text-[#067647]'
-      : normalized === 'FAILED' || normalized === 'REJECTED' || normalized === 'BLOCKED' || normalized === 'ERROR' || normalized === 'Transform Failed'
+      : normalized === 'FAILED' || normalized === 'REJECTED' || normalized === 'BLOCKED' || normalized === 'ERROR' || normalized === 'Transform Failed' || normalized === 'FAILED_UNKNOWN_TERMS'
         ? 'border-[#f7b4ae] bg-[#fff1f0] text-[#b42318]'
         : normalized === 'PARTIAL_SUCCESS' || normalized === 'WARNED'
           ? 'border-[#f5c97a] bg-[#fffbeb] text-[#b54708]'
