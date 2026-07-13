@@ -25,13 +25,16 @@ import {
   semanticCheckerApi,
   semanticMakerApi,
   semanticRulesApi,
+  traceLogsApi,
   workflowsApi,
   type AsyncJob,
   type CheckerRun,
   type JsonRecord,
   type SemanticRule,
   type SemanticRuleRewriteMode,
+  type UnknownTerm,
 } from '../api'
+import { UnknownTermsModal } from '../components/UnknownTermsModal'
 import { JobSummaryCard, WorkflowStageJobs } from '../components/WorkflowStageJobs'
 import { WorkflowStagePipeline } from '../components/WorkflowStagePipeline'
 import {
@@ -80,6 +83,7 @@ export function SemanticStagePage() {
   const [humanFeedback, setHumanFeedback] = useState('')
   const [editRule, setEditRule] = useState<SemanticRule | null>(null)
   const [editText, setEditText] = useState('')
+  const [unknownTerms, setUnknownTerms] = useState<{ jobType: string; terms: UnknownTerm[] } | null>(null)
   const semanticRulesQueryKey = ['semantic-rules', workflowId] as const
 
   useEffect(() => {
@@ -169,6 +173,16 @@ export function SemanticStagePage() {
     if (job.status === 'FAILED') {
       toast.error(job.errorMessage || semanticJobFailureMessage(job.jobType))
       window.setTimeout(() => setActiveJobId(null), 0)
+    }
+    if (job.status === 'FAILED_UNKNOWN_TERMS') {
+      traceLogsApi.getByJobId(job.id).then((trace) => {
+        const allTerms = trace.agentSessions.flatMap((s) => s.unknownTerms)
+        if (allTerms.length > 0) {
+          setUnknownTerms({ jobType: job.jobType, terms: allTerms })
+        }
+      }).catch(() => {
+        toast.error('Failed to load unknown terms')
+      })
     }
   }, [jobQuery.data, queryClient, navigate, workflowId, setWorkflowId])
 
@@ -727,6 +741,22 @@ export function SemanticStagePage() {
             </div>
           </form>
         </SemanticDialog>
+      ) : null}
+
+      {unknownTerms ? (
+        <UnknownTermsModal
+          jobType={unknownTerms.jobType}
+          unknownTerms={unknownTerms.terms}
+          onClose={() => setUnknownTerms(null)}
+          onUploadDocs={() => {
+            setUnknownTerms(null)
+            navigate('/knowledge-base')
+          }}
+          onRetry={() => {
+            setUnknownTerms(null)
+            reRunMakerMutation.mutate()
+          }}
+        />
       ) : null}
     </div>
   )
