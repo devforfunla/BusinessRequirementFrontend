@@ -31,7 +31,11 @@ The frontend must detect this condition in the main workflow (Semantic and Atomi
 
 `session.finalStatus` may now be `FAILED_UNKNOWN_TERMS`. This is distinct from `FAILED` (generic infrastructure failure) — it specifically means knowledge is missing.
 
-### 2.4 Backward compatibility
+### 2.4 Field position
+
+`unknownTerms` lives at the `AgentTraceResponse` level — a sibling of `session` and `llmCalls`, **not** nested inside the `session` object. The BE spec's schema table confirms this; the JSON example in the BE spec erroneously places it inside `session`.
+
+### 2.5 Backward compatibility
 
 - `unknownTerms` is always present on `AgentTraceResponse` — if absent from older API version, treat as `[]`
 - The job status `FAILED_UNKNOWN_TERMS` only appears for new sessions
