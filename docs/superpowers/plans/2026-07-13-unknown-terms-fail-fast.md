@@ -30,7 +30,7 @@
 ## Conventions
 
 - **TypeScript strictness:** `verbatimModuleSyntax: true`, `erasableSyntaxOnly: true`, `noUnusedLocals`/`noUnusedParameters`
-- **Verification:** `npm run lint && npm run build && npm test` before each commit
+- **Verification:** `npm run lint && npm run build && npm test` before each commit. (vitest is configured on this branch, 19 tests pass.)
 - **Commits:** Conventional Commits. End with `Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>`
 
 ---
@@ -254,7 +254,7 @@ In the existing `useEffect` at line 152, after the `FAILED` case, add:
 
 ```tsx
     if (job.status === 'FAILED_UNKNOWN_TERMS') {
-      // Fetch trace to get unknown terms
+      // Fetch trace to get unknown terms — do NOT clear activeJobId
       traceLogsApi.getByJobId(job.id).then((trace) => {
         const allTerms = trace.agentSessions.flatMap((s) => s.unknownTerms)
         if (allTerms.length > 0) {
@@ -263,11 +263,10 @@ In the existing `useEffect` at line 152, after the `FAILED` case, add:
       }).catch(() => {
         toast.error('Failed to load unknown terms')
       })
-      window.setTimeout(() => setActiveJobId(null), 0)
     }
 ```
 
-Key difference from FAILED: does NOT clear `activeJobId` immediately — the modal stays open.
+Key: does NOT clear `activeJobId` (unlike SUCCEEDED/FAILED). The user needs to see the terms before dismissing.
 
 - [ ] **Step 4: Render the modal**
 
@@ -428,15 +427,41 @@ Using the Fragment pattern (same as KnowledgeBasePage outline rows), wrap each j
 ) : null}
 ```
 
-- [ ] **Step 6: Render the modal**
+- [ ] **Step 6: Update LlmTraceButton drawer**
+
+In the `LlmTraceButton` component (around line 1721), the session header currently shows:
+```tsx
+Session #{si + 1} — {s.session.finalStatus} — {s.session.totalTokens ?? 0} tokens
+```
+
+After this header, add the unknown terms section when present (same code as Task 6). This is separate from the TraceLogsPage change — `LlmTraceButton` is an independent inline component.
+
+```tsx
+{s.session.finalStatus === 'FAILED_UNKNOWN_TERMS' && s.unknownTerms.length > 0 ? (
+  <div className="mb-3 rounded-md border border-[#f7b4ae] bg-[#fff1f0] px-3 py-2">
+    <p className="text-xs font-semibold text-[#b42318]">
+      Missing terms ({s.unknownTerms.length})
+    </p>
+    <div className="mt-1.5 flex flex-wrap gap-1">
+      {s.unknownTerms.map((term, i) => (
+        <span key={i} className="rounded border border-[#f7b4ae] bg-white px-1.5 py-0.5 text-xs text-[#b42318]" title={term.reason}>
+          {term.query}
+        </span>
+      ))}
+    </div>
+  </div>
+) : null}
+```
+
+- [ ] **Step 7: Render the modal**
 
 Same as Task 4 — add at the bottom of the JSX.
 
-- [ ] **Step 7: Verify**
+- [ ] **Step 8: Verify**
 
 Run: `npm run lint && npm run build && npm test`
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
 git add src/pages/AtomicStagePage.tsx
@@ -468,7 +493,7 @@ READ `src/pages/TraceLogsPage.tsx` around lines 119-155 (agent session rendering
 After the `finalValidationMessage` block (around line 148) and before `<LlmCalls calls={agentTrace.llmCalls} />`, add:
 
 ```tsx
-{agentTrace.unknownTerms && agentTrace.unknownTerms.length > 0 ? (
+{agentTrace.session.finalStatus === 'FAILED_UNKNOWN_TERMS' && agentTrace.unknownTerms.length > 0 ? (
   <div className="rounded-md border border-[#f7b4ae] bg-[#fff1f0] px-4 py-3">
     <h4 className="text-sm font-semibold text-[#b42318]">
       Knowledge Gap — {agentTrace.unknownTerms.length} term{agentTrace.unknownTerms.length === 1 ? '' : 's'}
