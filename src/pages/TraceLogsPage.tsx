@@ -147,6 +147,25 @@ export function TraceLogsPage() {
                       </div>
                     ) : null}
 
+                    {agentTrace.session.finalStatus === 'FAILED_UNKNOWN_TERMS' && agentTrace.unknownTerms.length > 0 ? (
+                      <div className="rounded-md border border-[#f7b4ae] bg-[#fff1f0] px-4 py-3">
+                        <h4 className="text-sm font-semibold text-[#b42318]">
+                          Knowledge Gap — {agentTrace.unknownTerms.length} term{agentTrace.unknownTerms.length === 1 ? '' : 's'}
+                        </h4>
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {agentTrace.unknownTerms.map((term, i) => (
+                            <span
+                              key={i}
+                              className="rounded border border-[#f7b4ae] bg-white px-2 py-0.5 text-xs text-[#b42318]"
+                              title={term.reason}
+                            >
+                              {term.query}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+
                     <LlmCalls calls={agentTrace.llmCalls} />
                   </section>
                 ))}
