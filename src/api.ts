@@ -602,9 +602,15 @@ export type LlmCallTrace = {
   toolCalls: ToolCallAudit[]
 }
 
+export type UnknownTerm = {
+  query: string
+  reason: string
+}
+
 export type AgentTrace = {
   session: LlmAgentSession
   llmCalls: LlmCallTrace[]
+  unknownTerms: UnknownTerm[]
 }
 
 export type JobTraceResponse = {
