@@ -1,7 +1,8 @@
-import React, { type ReactNode, useEffect, useMemo, useState } from 'react'
-import { Link, useLocation, useParams } from 'react-router-dom'
+import React, { Fragment, type ReactNode, useEffect, useMemo, useState } from 'react'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  AlertTriangle,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
@@ -38,6 +39,7 @@ import {
   type ExtractionGroup,
   type JsonRecord,
   type SemanticRule,
+  type UnknownTerm,
 } from '../api'
 import { JobSummaryCard, WorkflowStageJobs } from '../components/WorkflowStageJobs'
 import { WorkflowStagePipeline } from '../components/WorkflowStagePipeline'
@@ -58,6 +60,7 @@ import {
   type TabItem,
   TextArea,
 } from '../components/ui'
+import { UnknownTermsModal } from '../components/UnknownTermsModal'
 import { usePolledJob } from '../hooks'
 import { useAppStore } from '../store'
 import { cn, formatDate } from '../utils'
@@ -94,6 +97,8 @@ export function AtomicStagePage() {
   const [editText, setEditText] = useState('')
   const [consolidatedRule, setConsolidatedRule] = useState<{ rule: AtomicRule; checkerJson?: string | null } | null>(null)
   const [versionHistoryRule, setVersionHistoryRule] = useState<AtomicRule | null>(null)
+  const [unknownTerms, setUnknownTerms] = useState<{ jobType: string; terms: UnknownTerm[] } | null>(null)
+  const navigate = useNavigate()
   const atomicRulesQueryKey = ['atomic-rules', workflowId] as const
 
   useEffect(() => {
@@ -202,6 +207,17 @@ export function AtomicStagePage() {
     }
     if (job.status === 'FAILED') {
       toast.error(job.errorMessage || `${formatJobType(job.jobType)} failed`)
+      window.setTimeout(complete, 0)
+    }
+    if (job.status === 'FAILED_UNKNOWN_TERMS') {
+      traceLogsApi.getByJobId(job.id).then((trace) => {
+        const allTerms = trace.agentSessions.flatMap((s) => s.unknownTerms)
+        if (allTerms.length > 0) {
+          setUnknownTerms({ jobType: job.jobType, terms: allTerms })
+        }
+      }).catch(() => {
+        toast.error('Failed to load unknown terms')
+      })
       window.setTimeout(complete, 0)
     }
   }, [jobQuery.data, queryClient])
@@ -1057,6 +1073,22 @@ export function AtomicStagePage() {
           onClose={() => setVersionHistoryRule(null)}
         />
       ) : null}
+
+      {unknownTerms ? (
+        <UnknownTermsModal
+          jobType={unknownTerms.jobType}
+          unknownTerms={unknownTerms.terms}
+          onClose={() => setUnknownTerms(null)}
+          onUploadDocs={() => {
+            setUnknownTerms(null)
+            navigate('/knowledge-base')
+          }}
+          onRetry={() => {
+            setUnknownTerms(null)
+            startJobMutation.mutate('atomic-maker')
+          }}
+        />
+      ) : null}
     </div>
   )
 }
@@ -1439,6 +1471,8 @@ function formatJobType(jobType?: string | null) {
 function JobHistoryTable({ jobs, jobTypes }: { jobs: AsyncJob[]; jobTypes: string[] }) {
   const { workflowId = '' } = useParams()
   const [compareJob, setCompareJob] = useState<AsyncJob | null>(null)
+  const [expandedTermsJobId, setExpandedTermsJobId] = useState<string | null>(null)
+  const [termsCache, setTermsCache] = useState<Record<string, UnknownTerm[]>>({})
 
   const stageJobs = jobs
     .filter((j) => jobTypes.includes(j.jobType))
@@ -1479,46 +1513,97 @@ function JobHistoryTable({ jobs, jobTypes }: { jobs: AsyncJob[]; jobTypes: strin
             {stageJobs.map((job, index) => {
               const isEdit = job.jobType === 'EDIT' || job.jobType === 'ATOMIC_REWRITE' || job.jobType === 'ATOMIC_REWRITE_CHECKER_FEEDBACK' || job.jobType === 'ATOMIC_REWRITE_HUMAN_FEEDBACK'
               return (
-                <tr key={job.id} className={cn('border-b border-[#edf1f6] align-top last:border-0', isJobRunning(job.status) && 'bg-[#fafcff]')}>
-                  <td className="px-4 py-3 text-[#667085]">{stageJobs.length - index}</td>
-                  <td className="px-4 py-3">
-                    <JobTypePill jobType={job.jobType} />
-                  </td>
-                  <td className="px-4 py-3"><StatusPill value={job.status} /></td>
-                  <td className="px-4 py-3">
-                    <span className="font-mono text-xs text-[#667085]">{job.id}</span>
-                  </td>
-                  <td className="px-4 py-3">
-                    {job.triggeredByJobId ? (
-                      <span className="font-mono text-xs text-[#175cd3]">{job.triggeredByJobId}</span>
-                    ) : (
-                      <span className="text-xs text-[#98a2b3]">manual</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    {job.latestMakerJobId ? (
-                      <span className="font-mono text-xs text-[#175cd3]">{job.latestMakerJobId}</span>
-                    ) : (
-                      <span className="text-xs text-[#98a2b3]">-</span>
-                    )}
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-[#667085]">{formatDate(job.createdAt)}</td>
-                  <td className="px-4 py-3">
-                    <JsonViewButton title={`${job.jobType} Input`} value={job.inputPayload} />
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex gap-2">
-                      <JsonViewButton title={`${job.jobType} Result`} value={job.resultPayload} />
-                      {isEdit && job.status === 'SUCCEEDED' ? (
-                        <Button size="sm" onClick={() => setCompareJob(job)}>Compare</Button>
-                      ) : null}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <LlmTraceButton jobId={job.id} />
-                  </td>
-                  <td className="max-w-xs px-4 py-3 text-xs text-[#b42318]">{job.errorMessage || '-'}</td>
-                </tr>
+                <Fragment key={job.id}>
+                  <tr className={cn('border-b border-[#edf1f6] align-top last:border-0', isJobRunning(job.status) && 'bg-[#fafcff]')}>
+                    <td className="px-4 py-3 text-[#667085]">{stageJobs.length - index}</td>
+                    <td className="px-4 py-3">
+                      <JobTypePill jobType={job.jobType} />
+                    </td>
+                    <td className="px-4 py-3"><StatusPill value={job.status} /></td>
+                    <td className="px-4 py-3">
+                      <span className="font-mono text-xs text-[#667085]">{job.id}</span>
+                    </td>
+                    <td className="px-4 py-3">
+                      {job.triggeredByJobId ? (
+                        <span className="font-mono text-xs text-[#175cd3]">{job.triggeredByJobId}</span>
+                      ) : (
+                        <span className="text-xs text-[#98a2b3]">manual</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {job.latestMakerJobId ? (
+                        <span className="font-mono text-xs text-[#175cd3]">{job.latestMakerJobId}</span>
+                      ) : (
+                        <span className="text-xs text-[#98a2b3]">-</span>
+                      )}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-[#667085]">{formatDate(job.createdAt)}</td>
+                    <td className="px-4 py-3">
+                      <JsonViewButton title={`${job.jobType} Input`} value={job.inputPayload} />
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex gap-2">
+                        <JsonViewButton title={`${job.jobType} Result`} value={job.resultPayload} />
+                        {isEdit && job.status === 'SUCCEEDED' ? (
+                          <Button size="sm" onClick={() => setCompareJob(job)}>Compare</Button>
+                        ) : null}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex gap-1">
+                        <LlmTraceButton jobId={job.id} />
+                        {job.status === 'FAILED_UNKNOWN_TERMS' ? (
+                          <Button
+                            size="sm"
+                            variant="danger"
+                            title="View unknown terms"
+                            onClick={async (e) => {
+                              e.stopPropagation()
+                              if (expandedTermsJobId === job.id) {
+                                setExpandedTermsJobId(null)
+                              } else {
+                                if (!termsCache[job.id]) {
+                                  try {
+                                    const trace = await traceLogsApi.getByJobId(job.id)
+                                    const allTerms = trace.agentSessions.flatMap((s) => s.unknownTerms)
+                                    setTermsCache((prev) => ({ ...prev, [job.id]: allTerms }))
+                                  } catch { /* ignore */ }
+                                }
+                                setExpandedTermsJobId(job.id)
+                              }
+                            }}
+                          >
+                            <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
+                            Terms
+                          </Button>
+                        ) : null}
+                      </div>
+                    </td>
+                    <td className="max-w-xs px-4 py-3 text-xs text-[#b42318]">{job.errorMessage || '-'}</td>
+                  </tr>
+                  {expandedTermsJobId === job.id && termsCache[job.id] ? (
+                    <tr>
+                      <td colSpan={11} className="border-b border-[#f7b4ae] bg-[#fffcfc] px-4 py-3">
+                        <div className="space-y-2">
+                          <p className="text-sm font-semibold text-[#b42318]">
+                            Missing terms ({termsCache[job.id].length})
+                          </p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {termsCache[job.id].map((term, i) => (
+                              <span
+                                key={i}
+                                className="rounded border border-[#f7b4ae] bg-[#fff1f0] px-2 py-0.5 text-xs text-[#b42318]"
+                                title={term.reason}
+                              >
+                                {term.query}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : null}
+                </Fragment>
               )
             })}
           </tbody>
@@ -1750,6 +1835,20 @@ function LlmTraceButton({ jobId }: { jobId: string }) {
                       <h3 className="mb-2 text-sm font-medium text-[#475467]">
                         Session #{si + 1} — {s.session.finalStatus} — {s.session.totalTokens ?? 0} tokens
                       </h3>
+                      {s.session.finalStatus === 'FAILED_UNKNOWN_TERMS' && s.unknownTerms && s.unknownTerms.length > 0 ? (
+                        <div className="mb-3 rounded-md border border-[#f7b4ae] bg-[#fff1f0] px-3 py-2">
+                          <p className="text-xs font-semibold text-[#b42318]">
+                            Missing terms ({s.unknownTerms.length})
+                          </p>
+                          <div className="mt-1.5 flex flex-wrap gap-1">
+                            {s.unknownTerms.map((term, i) => (
+                              <span key={i} className="rounded border border-[#f7b4ae] bg-white px-1.5 py-0.5 text-xs text-[#b42318]" title={term.reason}>
+                                {term.query}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
                       {s.llmCalls.map((trace, ci) => (
                         <details key={ci} className="mb-3 rounded-md border border-[#e3e8f0]">
                           <summary className="cursor-pointer bg-[#f8fafc] px-3 py-2 text-xs font-medium text-[#475467]">
