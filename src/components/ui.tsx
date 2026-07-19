@@ -273,22 +273,26 @@ type SourceEntry = {
   reason?: string | null
 }
 
-function formatSourceCitation(source: SourceEntry, index: number): string {
+function formatSourceCitation(source: SourceEntry): string {
   const doc = source.docName ?? `Document ${source.docId}`
   const loc = source.path ? `§${source.path}` : `(section ${source.sectionId})`
   const title = source.title ? ` — ${source.title}` : ''
   const ref = formatReferenceChain(source)
-  return `[${index + 1}] ${doc} ${loc}${title}${ref}`
+  return `${doc} ${loc}${title}${ref}`
 }
 
 function formatReferenceChain(source: SourceEntry): string {
   if (source.referredFromSectionId == null) return ''
-  const doc =
-    source.referredFromDocName ?? `Document ${source.referredFromSectionId}`
-  const loc = source.referredFromPath
-    ? `§${source.referredFromPath}`
-    : `(section ${source.referredFromSectionId})`
-  return ` (from ${doc} ${loc})`
+  if (source.referredFromDocName && source.referredFromPath) {
+    return ` (from ${source.referredFromDocName} §${source.referredFromPath})`
+  }
+  if (source.referredFromDocName) {
+    return ` (from ${source.referredFromDocName} (section ${source.referredFromSectionId}))`
+  }
+  if (source.referredFromPath) {
+    return ` (from §${source.referredFromPath})`
+  }
+  return ` (from section ${source.referredFromSectionId})`
 }
 
 function parseSources(sourcesJson?: string | null): SourceEntry[] | null {
@@ -315,13 +319,13 @@ export function SourcesList({ sourcesJson }: { sourcesJson?: string | null }) {
       <ul className="space-y-0.5">
         {sources.map((source, i) => (
           <li
-            key={source.sectionId}
+            key={`${source.docId}-${source.sectionId}`}
             className="flex items-baseline gap-1 text-xs text-[#344054]"
           >
             <span className="font-medium text-[#1f6feb]">
               [{i + 1}]
             </span>
-            <span>{formatSourceCitation(source, i)}</span>
+            <span>{formatSourceCitation(source)}</span>
             {source.reason ? (
               <span
                 className="cursor-help text-[#98a2b3]"
