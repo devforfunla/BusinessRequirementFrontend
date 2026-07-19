@@ -1,9 +1,9 @@
 import { Fragment, useState } from 'react'
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query'
-import { Archive, Box, BookOpen, ListTree, RefreshCw, Trash2, Upload } from 'lucide-react'
+import { Archive, Box, BookOpen, ChevronDown, ChevronRight, ListTree, RefreshCw, Trash2, Upload } from 'lucide-react'
 import { toast } from 'sonner'
-import { getErrorMessage, knowledgeBaseApi, type KbDocument, type KbDocumentOutline, type KbDocumentStatus } from '../api'
-import { formatBytes, formatDate } from '../utils'
+import { getErrorMessage, knowledgeBaseApi, type KbDocument, type KbDocumentOutline, type KbDocumentStatus, type SectionTreeNode } from '../api'
+import { cn, formatBytes, formatDate } from '../utils'
 import { Button, EmptyState, ErrorNotice, Label, PageTitle, Panel, PanelHeader, Select, StatusPill, StickyScrollX, TextInput } from '../components/ui'
 
 type StatusFilter = KbDocumentStatus | 'all'
@@ -16,6 +16,24 @@ const STATUS_FILTER_OPTIONS: { value: StatusFilter; label: string }[] = [
   { value: 'outdated', label: 'Outdated' },
   { value: 'archived', label: 'Archived' },
 ]
+
+function countAllSections(tree: SectionTreeNode[]): number {
+  let count = 0
+  for (const node of tree) {
+    count += 1
+    count += countAllSections(node.children)
+  }
+  return count
+}
+
+function hasNullSummary(tree: KbDocumentOutline | undefined): boolean {
+  if (!tree) return false
+  for (const node of tree) {
+    if (node.summary === null) return true
+    if (hasNullSummary(node.children)) return true
+  }
+  return false
+}
 
 export function KnowledgeBasePage() {
   const queryClient = useQueryClient()
@@ -47,6 +65,10 @@ export function KnowledgeBasePage() {
     queryFn: () => knowledgeBaseApi.outline(expandedDocId!),
     enabled: expandedDocId !== null,
     staleTime: 60_000,
+    refetchInterval: (query) => {
+      const tree = query.state.data as KbDocumentOutline | undefined
+      return hasNullSummary(tree) ? 5000 : false
+    },
   })
 
   const deleteMutation = useMutation({
@@ -265,6 +287,20 @@ function OutlinePanel({
   doc: KbDocument
   outlineQuery: UseQueryResult<KbDocumentOutline>
 }) {
+  const [collapsedIds, setCollapsedIds] = useState<Set<number>>(new Set())
+
+  const toggleCollapse = (sectionId: number) => {
+    setCollapsedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(sectionId)) {
+        next.delete(sectionId)
+      } else {
+        next.add(sectionId)
+      }
+      return next
+    })
+  }
+
   if (doc.status !== 'active' && doc.status !== 'archived') {
     return (
       <p className="text-sm text-[#667085]">
@@ -278,8 +314,8 @@ function OutlinePanel({
   if (outlineQuery.isError) {
     return <ErrorNotice message={getErrorMessage(outlineQuery.error)} />
   }
-  const sections = outlineQuery.data || []
-  if (sections.length === 0) {
+  const tree = outlineQuery.data || []
+  if (tree.length === 0) {
     return (
       <div className="space-y-1">
         <p className="text-sm font-medium text-[#172033]">No sections created.</p>
@@ -289,24 +325,86 @@ function OutlinePanel({
       </div>
     )
   }
+  const totalSections = countAllSections(tree)
   return (
     <div className="space-y-2">
       <p className="text-sm font-medium text-[#172033]">
-        {sections.length} section{sections.length === 1 ? '' : 's'} created.
+        {totalSections} section{totalSections === 1 ? '' : 's'}, {tree.length} top-level heading{tree.length === 1 ? '' : 's'}
       </p>
-      <div className="flex flex-wrap gap-1.5">
-        {sections.map((section) => (
-          <span
-            key={section.sectionId}
-            className="rounded border border-[#d8dee8] bg-white px-2 py-0.5 text-xs text-[#475467]"
-          >
-            #{section.sectionId}
-          </span>
+      <ul className="space-y-0.5">
+        {tree.map((node) => (
+          <SectionNodeView
+            key={node.sectionId}
+            node={node}
+            collapsedIds={collapsedIds}
+            toggleCollapse={toggleCollapse}
+          />
         ))}
-      </div>
-      <p className="text-xs text-[#98a2b3]">
-        Outline endpoint returns section IDs only. Content view is future work.
-      </p>
+      </ul>
     </div>
+  )
+}
+
+function SectionNodeView({
+  node,
+  collapsedIds,
+  toggleCollapse,
+}: {
+  node: SectionTreeNode
+  collapsedIds: Set<number>
+  toggleCollapse: (id: number) => void
+}) {
+  const isCollapsed = collapsedIds.has(node.sectionId)
+  const hasChildren = node.children.length > 0
+
+  return (
+    <li className="list-none">
+      <div
+        className={cn(
+          'flex items-start gap-1 py-0.5',
+          hasChildren && 'cursor-pointer',
+        )}
+        onClick={() => hasChildren && toggleCollapse(node.sectionId)}
+      >
+        {hasChildren ? (
+          isCollapsed ? (
+            <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-[#667085]" aria-hidden="true" />
+          ) : (
+            <ChevronDown className="mt-0.5 h-4 w-4 shrink-0 text-[#667085]" aria-hidden="true" />
+          )
+        ) : (
+          <span className="inline-block w-4 shrink-0" aria-hidden="true" />
+        )}
+        <div className="min-w-0">
+          <div className="flex items-baseline gap-1.5">
+            {node.path !== null && (
+              <span className="shrink-0 text-xs text-[#667085]">{node.path}</span>
+            )}
+            <span className="text-sm font-medium text-[#172033]">
+              {node.title ?? '(untitled)'}
+            </span>
+          </div>
+          {node.summary !== null ? (
+            <p className="mt-0.5 line-clamp-2 text-xs leading-snug text-[#667085]">
+              {node.summary}
+            </p>
+          ) : (
+            <p className="mt-0.5 text-xs italic text-[#98a2b3]">Summary pending…</p>
+          )}
+        </div>
+      </div>
+      {hasChildren && !isCollapsed && (
+        <ul className="pl-6">
+          {node.children.map((child) => (
+            <SectionNodeView
+              key={child.sectionId}
+              node={child}
+              collapsedIds={collapsedIds}
+              toggleCollapse={toggleCollapse}
+            />
+          ))}
+        </ul>
+      )}
+    </li>
   )
 }
