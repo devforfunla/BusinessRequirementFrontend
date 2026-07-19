@@ -1132,8 +1132,16 @@ export type KbDocument = {
   indexedAt?: string | null
 }
 
-export type KbSectionRef = { sectionId: number }
-export type KbDocumentOutline = KbSectionRef[]
+export interface SectionTreeNode {
+  sectionId: number
+  title: string | null
+  level: number | null
+  path: string | null
+  summary: string | null
+  children: SectionTreeNode[]
+}
+
+export type KbDocumentOutline = SectionTreeNode[]
 
 export const knowledgeBaseApi = {
   list: (status?: KbDocumentStatus) =>
