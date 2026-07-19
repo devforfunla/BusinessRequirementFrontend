@@ -1,7 +1,7 @@
 # Outline Tree Redesign — Design Spec
 
 **Date:** 2026-07-19
-**Trigger:** `GET /api/documents/{id}/outline` changed from flat `{sectionId}[]` to a nested `SectionTreeNode[]` tree (KnowledgeBase commit `aa02e65`). Backend has no backwards-compat shim.
+**Trigger:** `GET /api/documents/{id}/outline` (backend; frontend calls via Vite proxy at `/kb-api/documents/{id}/outline`) changed from flat `{sectionId}[]` to a nested `SectionTreeNode[]` tree (KnowledgeBase commit `aa02e65`). Backend has no backwards-compat shim.
 **Scope:** Migrate `KnowledgeBasePage.tsx` `OutlinePanel` from rendering a flat `#sectionId` chip list to a collapsible, recursive tree showing title/path/summary.
 
 ## Decisions
@@ -46,7 +46,7 @@ export type KbDocumentOutline = SectionTreeNode[]
 - Header: `"N sections"` + a top-level heading count
 - Empty/loading/error guards remain unchanged from current code
 - If tree non-empty, renders `<ul>` → `SectionNodeView` recursive
-- Polling: a file-private `hasNullSummary(tree)` helper walks the tree. `outlineQuery` (declared in `KnowledgeBasePage`) gets `refetchInterval: (query) => hasNullSummary(query.state.data) ? 5000 : false`
+- Polling: a file-private `hasNullSummary(tree)` helper walks the tree. `outlineQuery` (declared in `KnowledgeBasePage`) gets `refetchInterval: (query) => hasNullSummary(query.state.data) ? 5000 : false`. Once all summaries resolve, polling stops permanently — structural changes (sections added/removed post-ingestion) require a manual page refresh.
 
 ### `SectionNodeView` (new, file-private recursive component)
 
