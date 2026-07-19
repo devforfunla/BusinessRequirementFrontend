@@ -1,6 +1,6 @@
 import type { ButtonHTMLAttributes, HTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { AlertCircle, Inbox, X } from 'lucide-react'
+import { AlertCircle, Inbox, Info, X } from 'lucide-react'
 import { parseJsonText } from '../api'
 import { cn } from '../utils'
 
@@ -257,6 +257,83 @@ export function JsonBlock({ value, className }: { value: unknown; className?: st
     <pre className={cn('json-pre max-h-96 overflow-auto rounded-md bg-[#101828] p-3 text-xs leading-5 text-[#e6edf7]', className)}>
       {display || 'null'}
     </pre>
+  )
+}
+
+type SourceEntry = {
+  docId: number
+  docName?: string | null
+  sectionId: number
+  title?: string | null
+  level?: number | null
+  path?: string | null
+  referredFromSectionId?: number | null
+  referredFromDocName?: string | null
+  referredFromPath?: string | null
+  reason?: string | null
+}
+
+function formatSourceCitation(source: SourceEntry, index: number): string {
+  const doc = source.docName ?? `Document ${source.docId}`
+  const loc = source.path ? `§${source.path}` : `(section ${source.sectionId})`
+  const title = source.title ? ` — ${source.title}` : ''
+  const ref = formatReferenceChain(source)
+  return `[${index + 1}] ${doc} ${loc}${title}${ref}`
+}
+
+function formatReferenceChain(source: SourceEntry): string {
+  if (source.referredFromSectionId == null) return ''
+  const doc =
+    source.referredFromDocName ?? `Document ${source.referredFromSectionId}`
+  const loc = source.referredFromPath
+    ? `§${source.referredFromPath}`
+    : `(section ${source.referredFromSectionId})`
+  return ` (from ${doc} ${loc})`
+}
+
+function parseSources(sourcesJson?: string | null): SourceEntry[] | null {
+  if (!sourcesJson) return null
+  try {
+    const parsed = JSON.parse(sourcesJson)
+    if (!Array.isArray(parsed) || parsed.length === 0) return null
+    return parsed as SourceEntry[]
+  } catch (e) {
+    console.warn('Failed to parse sourcesJson', e)
+    return null
+  }
+}
+
+export function SourcesList({ sourcesJson }: { sourcesJson?: string | null }) {
+  const sources = parseSources(sourcesJson)
+  if (!sources) return null
+
+  return (
+    <div className="mt-2 border-t border-[#e3e8f0] pt-2">
+      <div className="mb-1 text-[11px] font-medium uppercase tracking-wide text-[#667085]">
+        Sources ({sources.length})
+      </div>
+      <ul className="space-y-0.5">
+        {sources.map((source, i) => (
+          <li
+            key={source.sectionId}
+            className="flex items-baseline gap-1 text-xs text-[#344054]"
+          >
+            <span className="font-medium text-[#1f6feb]">
+              [{i + 1}]
+            </span>
+            <span>{formatSourceCitation(source, i)}</span>
+            {source.reason ? (
+              <span
+                className="cursor-help text-[#98a2b3]"
+                title={source.reason}
+              >
+                <Info size={12} />
+              </span>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }
 
