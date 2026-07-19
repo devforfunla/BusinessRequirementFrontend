@@ -1,16 +1,18 @@
 import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
-import { Activity, ChevronLeft, ChevronRight, FileText, GitBranch, Layers3, ScrollText, Settings, ShieldCheck } from 'lucide-react'
+import { Activity, BarChart3, BookOpen, ChevronLeft, ChevronRight, FileText, GitBranch, Layers3, ScrollText, Settings, ShieldCheck } from 'lucide-react'
 import { useAppStore } from '../store'
 import { cn } from '../utils'
 import { TextInput } from './ui'
 
 const navItems = [
   { to: '/documents', label: 'Documents', icon: FileText },
+  { to: '/knowledge-base', label: 'Knowledge Base', icon: BookOpen },
   { to: '/workflows', label: 'Workflows', icon: GitBranch },
   { to: '/skills', label: 'Skills', icon: Settings },
   { to: '/application-logs', label: 'Application Logs', icon: ScrollText },
   { to: '/trace-logs', label: 'Trace Logs', icon: Activity },
+  { to: '/metrics', label: 'Metrics', icon: BarChart3 },
 ]
 
 export function AppShell() {

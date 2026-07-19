@@ -2,7 +2,7 @@ import { type FormEvent, type ReactNode, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Activity, GitBranch, RefreshCw, Search } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
-import { getErrorMessage, traceLogsApi, type LlmCallAudit } from '../api'
+import { getErrorMessage, traceLogsApi, type LlmCallTrace } from '../api'
 import { Button, EmptyState, ErrorNotice, JsonBlock, Label, PageTitle, Panel, PanelHeader, StatusPill, TextInput } from '../components/ui'
 import { formatDate } from '../utils'
 
@@ -147,6 +147,25 @@ export function TraceLogsPage() {
                       </div>
                     ) : null}
 
+                    {agentTrace.session.finalStatus === 'FAILED_UNKNOWN_TERMS' && agentTrace.unknownTerms.length > 0 ? (
+                      <div className="rounded-md border border-[#f7b4ae] bg-[#fff1f0] px-4 py-3">
+                        <h4 className="text-sm font-semibold text-[#b42318]">
+                          Knowledge Gap — {agentTrace.unknownTerms.length} term{agentTrace.unknownTerms.length === 1 ? '' : 's'}
+                        </h4>
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {agentTrace.unknownTerms.map((term, i) => (
+                            <span
+                              key={i}
+                              className="rounded border border-[#f7b4ae] bg-white px-2 py-0.5 text-xs text-[#b42318]"
+                              title={term.reason}
+                            >
+                              {term.query}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+
                     <LlmCalls calls={agentTrace.llmCalls} />
                   </section>
                 ))}
@@ -168,7 +187,7 @@ export function TraceLogsPage() {
   )
 }
 
-function LlmCalls({ calls }: { calls: LlmCallAudit[] }) {
+function LlmCalls({ calls }: { calls: LlmCallTrace[] }) {
   if (calls.length === 0) {
     return <EmptyState title="No LLM audit calls found" />
   }
@@ -177,25 +196,49 @@ function LlmCalls({ calls }: { calls: LlmCallAudit[] }) {
     <div className="space-y-2">
       <h4 className="text-sm font-semibold text-[#344054]">LLM Audit</h4>
       <div className="space-y-2">
-        {calls.map((call) => (
-          <details key={call.id} className="rounded-md border border-[#d8dee8] bg-white">
+        {calls.map((trace) => (
+          <details key={trace.call.id} className="rounded-md border border-[#d8dee8] bg-white">
             <summary className="grid cursor-pointer gap-3 px-3 py-2 text-sm hover:bg-[#f8fafc] md:grid-cols-[110px_1fr_120px_110px_120px] md:items-center">
-              <span className="font-medium text-[#172033]">Round {call.iterationRound ?? '-'}</span>
-              <span className="min-w-0 truncate font-mono text-xs text-[#667085]">{call.llmCallId}</span>
-              <StatusPill value={call.status} />
-              <span className="text-xs text-[#667085]">{formatDuration(call.durationMs)}</span>
-              <span className="text-xs text-[#667085]">{formatTokens(call.totalTokens)}</span>
+              <span className="font-medium text-[#172033]">Round {trace.call.iterationRound ?? '-'}</span>
+              <span className="min-w-0 truncate font-mono text-xs text-[#667085]">{trace.call.llmCallId}</span>
+              <StatusPill value={trace.call.status} />
+              <span className="text-xs text-[#667085]">{formatDuration(trace.call.durationMs)}</span>
+              <span className="text-xs text-[#667085]">{formatTokens(trace.call.totalTokens)}</span>
             </summary>
             <div className="space-y-3 border-t border-[#e3e8f0] p-3">
               <div className="grid gap-3 lg:grid-cols-4">
-                <TraceField label="Model" value={call.model} />
-                <TraceField label="Retry Count" value={call.retryCount ?? 0} />
-                <TraceField label="Created" value={formatDate(call.createdAt)} />
-                <TraceField label="Prompt Tokens" value={call.promptTokens ?? '-'} />
+                <TraceField label="Model" value={trace.call.model} />
+                <TraceField label="Retry Count" value={trace.call.retryCount ?? 0} />
+                <TraceField label="Created" value={formatDate(trace.call.createdAt)} />
+                <TraceField label="Prompt Tokens" value={trace.call.promptTokens ?? '-'} />
               </div>
-              {call.errorMessage ? <ErrorNotice message={call.errorMessage} /> : null}
-              <PayloadDetails title="Prompt" value={call.prompt} />
-              <PayloadDetails title="Response" value={call.response} />
+              {trace.call.errorMessage ? <ErrorNotice message={trace.call.errorMessage} /> : null}
+              <PayloadDetails title="Prompt" value={trace.call.prompt} />
+              <PayloadDetails title="Response" value={trace.call.response} />
+
+              {/* Tool Calls */}
+              {trace.toolCalls.length > 0 && (
+                <div className="space-y-2">
+                  <h5 className="text-xs font-semibold uppercase text-[#667085]">
+                    Tool Calls ({trace.toolCalls.length})
+                  </h5>
+                  {trace.toolCalls.map((tc) => (
+                    <details key={tc.id} className="rounded-md border border-[#d8dee8] bg-white">
+                      <summary className="flex cursor-pointer items-center gap-3 px-3 py-1.5 text-xs hover:bg-[#f8fafc]">
+                        <span className="font-medium text-[#172033]">{tc.toolName}</span>
+                        <StatusPill value={tc.status} />
+                        <span className="text-[#667085]">{formatDuration(tc.durationMs)}</span>
+                        <span className="text-[#98a2b3]">{formatDate(tc.createdAt)}</span>
+                      </summary>
+                      <div className="space-y-2 border-t border-[#e3e8f0] p-3">
+                        {tc.errorMessage ? <ErrorNotice message={tc.errorMessage} /> : null}
+                        <PayloadDetails title="Request" value={tc.requestJson} />
+                        {tc.responseJson ? <PayloadDetails title="Response" value={tc.responseJson} /> : null}
+                      </div>
+                    </details>
+                  ))}
+                </div>
+              )}
             </div>
           </details>
         ))}

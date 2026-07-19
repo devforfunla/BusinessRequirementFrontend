@@ -1,8 +1,107 @@
 import type { ButtonHTMLAttributes, HTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react'
-import { useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { AlertCircle, Inbox, X } from 'lucide-react'
 import { parseJsonText } from '../api'
 import { cn } from '../utils'
+
+export type TabItem = { id: string; label: string; icon?: ReactNode }
+
+export function Tabs({
+  tabs,
+  activeTab,
+  onChange,
+}: {
+  tabs: TabItem[]
+  activeTab: string
+  onChange: (tabId: string) => void
+}) {
+  return (
+    <div className="flex border-b border-[#e3e8f0]" role="tablist">
+      {tabs.map((tab) => {
+        const isActive = tab.id === activeTab
+        return (
+          <button
+            key={tab.id}
+            role="tab"
+            aria-selected={isActive}
+            onClick={() => onChange(tab.id)}
+            className={cn(
+              'inline-flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition',
+              isActive
+                ? 'border-[#1f6feb] text-[#1f6feb]'
+                : 'border-transparent text-[#667085] hover:border-[#c8d0dc] hover:text-[#344054]',
+            )}
+          >
+            {tab.icon}
+            {tab.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+/**
+ * Wraps horizontally-scrollable content (e.g. wide tables) and pins
+ * a scrollbar to the bottom of the viewport while the content is in view.
+ */
+export function StickyScrollX({ children, className }: { children: ReactNode; className?: string }) {
+  const contentRef = useRef<HTMLDivElement>(null)
+  const scrollbarRef = useRef<HTMLDivElement>(null)
+  const innerRef = useRef<HTMLDivElement>(null)
+  const syncing = useRef(false)
+
+  const syncWidth = useCallback(() => {
+    const content = contentRef.current
+    const inner = innerRef.current
+    if (!content || !inner) return
+    inner.style.width = `${content.scrollWidth}px`
+  }, [])
+
+  useEffect(() => {
+    syncWidth()
+    const content = contentRef.current
+    if (!content) return
+    const ro = new ResizeObserver(syncWidth)
+    ro.observe(content)
+    if (content.firstElementChild) ro.observe(content.firstElementChild)
+    return () => ro.disconnect()
+  }, [syncWidth])
+
+  const onContentScroll = useCallback(() => {
+    if (syncing.current) return
+    syncing.current = true
+    if (scrollbarRef.current && contentRef.current) {
+      scrollbarRef.current.scrollLeft = contentRef.current.scrollLeft
+    }
+    syncing.current = false
+  }, [])
+
+  const onScrollbarScroll = useCallback(() => {
+    if (syncing.current) return
+    syncing.current = true
+    if (contentRef.current && scrollbarRef.current) {
+      contentRef.current.scrollLeft = scrollbarRef.current.scrollLeft
+    }
+    syncing.current = false
+  }, [])
+
+  return (
+    <div className={cn('relative', className)}>
+      <div ref={contentRef} className="overflow-x-auto" onScroll={onContentScroll}>
+        {children}
+      </div>
+      <div
+        ref={scrollbarRef}
+        className="sticky bottom-0 overflow-x-auto overflow-y-hidden"
+        style={{ height: 12 }}
+        onScroll={onScrollbarScroll}
+      >
+        <div ref={innerRef} style={{ height: 1 }} />
+      </div>
+    </div>
+  )
+}
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: 'primary' | 'secondary' | 'ghost' | 'danger'
@@ -118,13 +217,17 @@ export function Label({ label, children }: { label: string; children: ReactNode 
 export function StatusPill({ value }: { value?: string | null }) {
   const normalized = value || 'UNKNOWN'
   const style =
-    normalized === 'SUCCEEDED' || normalized === 'COMPLETED' || normalized === 'APPROVED' || normalized === 'PASSED'
+    normalized === 'SUCCEEDED' || normalized === 'COMPLETED' || normalized === 'APPROVED' || normalized === 'PASSED' || normalized === 'Transformed' || normalized === 'ACTIVE'
       ? 'border-[#9bd4b5] bg-[#ecfdf3] text-[#067647]'
-      : normalized === 'FAILED' || normalized === 'REJECTED' || normalized === 'BLOCKED'
+      : normalized === 'FAILED' || normalized === 'REJECTED' || normalized === 'BLOCKED' || normalized === 'ERROR' || normalized === 'Transform Failed' || normalized === 'FAILED_UNKNOWN_TERMS'
         ? 'border-[#f7b4ae] bg-[#fff1f0] text-[#b42318]'
-        : normalized === 'RUNNING' || normalized === 'PROCESSING' || normalized === 'QUEUED' || normalized === 'DRAFT'
-          ? 'border-[#b8ccf0] bg-[#eff6ff] text-[#175cd3]'
-          : 'border-[#d8dee8] bg-[#f8fafc] text-[#475467]'
+        : normalized === 'PARTIAL_SUCCESS' || normalized === 'WARNED'
+          ? 'border-[#f5c97a] bg-[#fffbeb] text-[#b54708]'
+          : normalized === 'RUNNING' || normalized === 'PROCESSING' || normalized === 'QUEUED' || normalized === 'DRAFT' || normalized === 'Transforming' || normalized === 'INGESTING'
+            ? 'border-[#b8ccf0] bg-[#eff6ff] text-[#175cd3]'
+            : normalized === 'Uploaded'
+              ? 'border-[#d8c4f7] bg-[#f5f0ff] text-[#6b21a8]'
+              : 'border-[#d8dee8] bg-[#f8fafc] text-[#475467]'
   return <span className={cn('inline-flex rounded-full border px-2 py-0.5 text-xs font-medium', style)}>{normalized}</span>
 }
 

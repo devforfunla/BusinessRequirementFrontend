@@ -1,12 +1,12 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { FileText, RefreshCw, Trash2, Upload } from 'lucide-react'
+import { AlertCircle, FileText, RefreshCw, Trash2, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { documentsApi, getErrorMessage } from '../api'
 import { useAppStore } from '../store'
 import { formatBytes, formatDate } from '../utils'
-import { Button, EmptyState, ErrorNotice, Label, PageTitle, Panel, PanelHeader, StatusPill, TextInput } from '../components/ui'
+import { Button, EmptyState, ErrorNotice, Label, PageTitle, Panel, PanelHeader, StatusPill, StickyScrollX, TextInput } from '../components/ui'
 
 export function DocumentsPage() {
   const navigate = useNavigate()
@@ -57,7 +57,7 @@ export function DocumentsPage() {
   const documents = documentsQuery.data || []
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5" suppressHydrationWarning>
       <PageTitle
         title="Documents"
         description="Upload source material, transform it to markdown, and start semantic analysis from a completed document."
@@ -90,14 +90,14 @@ export function DocumentsPage() {
       </Panel>
 
       <Panel>
-        <PanelHeader title="Document Queue" description={`${documents.length} document${documents.length === 1 ? '' : 's'}`} />
+        <PanelHeader title="Document List" description={`${documents.length} document${documents.length === 1 ? '' : 's'}`} />
         {documentsQuery.isError ? <div className="p-4"><ErrorNotice message={getErrorMessage(documentsQuery.error)} /></div> : null}
         {documents.length === 0 && !documentsQuery.isLoading ? (
           <div className="p-4">
             <EmptyState title="No documents found" description="Upload a document to begin the two-phase rule workflow." />
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <StickyScrollX>
             <table className="w-full min-w-[900px] border-collapse text-left text-sm">
               <thead className="bg-[#f8fafc] text-xs uppercase text-[#667085]">
                 <tr>
@@ -107,6 +107,7 @@ export function DocumentsPage() {
                   <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Pages</th>
                   <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Updated</th>
                   <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Actions</th>
+                  <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Log</th>
                 </tr>
               </thead>
               <tbody>
@@ -157,11 +158,21 @@ export function DocumentsPage() {
                         </Button>
                       </div>
                     </td>
+                    <td className="px-4 py-3">
+                      {document.errorMessage ? (
+                        <span className="flex items-start gap-1.5 text-xs text-[#d92d20]">
+                          <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                          <span className="line-clamp-3">{document.errorMessage}</span>
+                        </span>
+                      ) : (
+                        <span className="text-xs text-[#667085]">-</span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
+          </StickyScrollX>
         )}
       </Panel>
     </div>
@@ -169,5 +180,16 @@ export function DocumentsPage() {
 }
 
 function getDocumentStatusLabel(status?: string | null) {
-  return status === 'PENDING' ? 'Upload successful' : status
+  switch (status) {
+    case 'PENDING':
+      return 'Uploaded'
+    case 'PROCESSING':
+      return 'Transforming'
+    case 'COMPLETED':
+      return 'Transformed'
+    case 'FAILED':
+      return 'Transform Failed'
+    default:
+      return status || 'Unknown'
+  }
 }
