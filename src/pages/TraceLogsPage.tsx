@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Activity, GitBranch, RefreshCw, Search } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { getErrorMessage, traceLogsApi, type LlmCallTrace } from '../api'
-import { Button, EmptyState, ErrorNotice, JsonBlock, Label, PageTitle, Panel, PanelHeader, StatusPill, TextInput } from '../components/ui'
+import { Button, EmptyState, ErrorNotice, JsonBlock, Label, PageTitle, Panel, PanelHeader, SourcesList, StatusPill, TextInput } from '../components/ui'
 import { formatDate } from '../utils'
 
 export function TraceLogsPage() {
@@ -234,6 +234,7 @@ function LlmCalls({ calls }: { calls: LlmCallTrace[] }) {
                         {tc.errorMessage ? <ErrorNotice message={tc.errorMessage} /> : null}
                         <PayloadDetails title="Request" value={tc.requestJson} />
                         {tc.responseJson ? <PayloadDetails title="Response" value={tc.responseJson} /> : null}
+                        <SourcesList sourcesJson={tc.sourcesJson} />
                       </div>
                     </details>
                   ))}
