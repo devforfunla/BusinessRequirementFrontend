@@ -591,6 +591,7 @@ export type ToolCallAudit = {
   toolName: string
   requestJson: string
   responseJson?: string | null
+  sourcesJson?: string | null
   status: string
   durationMs?: number | null
   errorMessage?: string | null
