@@ -1,8 +1,9 @@
 import { useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Activity, AlertTriangle, GitBranch, RefreshCw, Search } from 'lucide-react'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, Cell, ResponsiveContainer } from 'recharts'
 import { useSearchParams } from 'react-router-dom'
-import { getErrorMessage, traceLogsApi, type JobTraceResponse, type JobTraceSummary, type LlmCallTrace } from '../api'
+import { getErrorMessage, metricsApi, traceLogsApi, type CheckerPassRateJob, type CheckerPassRateResponse, type JobTraceResponse, type JobTraceSummary, type LlmCallTrace, type TokenCostResponse } from '../api'
 import { Button, EmptyState, ErrorNotice, JsonBlock, Label, PageTitle, Panel, PanelHeader, SourcesList, StatusPill, TextInput } from '../components/ui'
 import { cn, formatDate } from '../utils'
 
@@ -20,6 +21,18 @@ export function TraceLogsPage() {
   })
 
   const workflowTrace = workflowTraceQuery.data
+
+  const tokenCostQuery = useQuery({
+    queryKey: ['metrics-token-cost', { workflowId: submittedWorkflowId }],
+    queryFn: () => metricsApi.tokenCost({ workflowId: submittedWorkflowId }),
+    enabled: Boolean(submittedWorkflowId) && workflowTraceQuery.isSuccess,
+  })
+
+  const checkerPassRateQuery = useQuery({
+    queryKey: ['metrics-checker-pass-rate', submittedWorkflowId],
+    queryFn: () => metricsApi.checkerPassRate(submittedWorkflowId),
+    enabled: Boolean(submittedWorkflowId) && workflowTraceQuery.isSuccess,
+  })
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -106,6 +119,30 @@ export function TraceLogsPage() {
               <TraceField label="Created" value={formatDate(workflowTrace.workflow.createdAt)} />
             </div>
           </Panel>
+
+          <div className="grid gap-5 lg:grid-cols-2">
+            <Panel>
+              <PanelHeader title="Token Usage" description="Aggregated token consumption across LLM and tool calls." />
+              {tokenCostQuery.isLoading ? (
+                <div className="flex items-center justify-center py-8 text-sm text-[#667085]">Loading metrics...</div>
+              ) : tokenCostQuery.isError ? (
+                <div className="p-4"><ErrorNotice message={getErrorMessage(tokenCostQuery.error)} /></div>
+              ) : tokenCostQuery.data ? (
+                <TokenMetricsPanel data={tokenCostQuery.data} />
+              ) : null}
+            </Panel>
+
+            <Panel>
+              <PanelHeader title="Checker Pass Rate" description="Rule checker validation results by workflow." />
+              {checkerPassRateQuery.isLoading ? (
+                <div className="flex items-center justify-center py-8 text-sm text-[#667085]">Loading metrics...</div>
+              ) : checkerPassRateQuery.isError ? (
+                <div className="p-4"><ErrorNotice message={getErrorMessage(checkerPassRateQuery.error)} /></div>
+              ) : checkerPassRateQuery.data ? (
+                <CheckerPassRatePanel data={checkerPassRateQuery.data} />
+              ) : null}
+            </Panel>
+          </div>
 
           <Panel>
             <PanelHeader
@@ -411,4 +448,129 @@ function formatDuration(value?: number | null) {
 function formatTokens(value?: number | null) {
   if (value == null) return '-'
   return `${value.toLocaleString()} tokens`
+}
+
+function MetricCard({
+  label,
+  value,
+  small,
+}: {
+  label: string
+  value: string | number
+  small?: boolean
+}) {
+  return (
+    <div className="rounded-md border border-[#e3e8f0] bg-[#f8fafc] px-4 py-3 text-center">
+      <div className={small ? 'text-base font-semibold text-[#172033]' : 'text-2xl font-bold text-[#172033]'}>
+        {value}
+      </div>
+      <div className="mt-1 text-xs text-[#667085]">{label}</div>
+    </div>
+  )
+}
+
+function passRateThresholds(rate: number) {
+  if (rate >= 90) return { colorClass: 'border-[#9bd4b5] bg-[#ecfdf3] text-[#067647]', hex: '#079455' }
+  if (rate >= 70) return { colorClass: 'border-[#f5c97a] bg-[#fffbeb] text-[#b54708]', hex: '#dc6803' }
+  return { colorClass: 'border-[#f7b4ae] bg-[#fff1f0] text-[#b42318]', hex: '#b42318' }
+}
+
+function PassRateCard({ rate }: { rate: number }) {
+  const { colorClass } = passRateThresholds(rate)
+
+  return (
+    <div className={`rounded-md border px-4 py-6 text-center ${colorClass}`}>
+      <div className="text-3xl font-bold">{rate.toFixed(1)}%</div>
+      <div className="mt-1 text-xs opacity-70">Pass Rate</div>
+    </div>
+  )
+}
+
+function formatJobType(type: string) {
+  return type.toLowerCase().replace(/(^|_)(\w)/g, (_, __, c: string) => ` ${c.toUpperCase()}`).trim()
+}
+
+function getJobTooltipLabel(payload: unknown): string {
+  const entry = Array.isArray(payload) ? payload[0] : undefined
+  if (!entry || typeof entry !== 'object' || !('payload' in entry)) return ''
+  const p = (entry as { payload: { jobType: string; jobId: string } }).payload
+  return p ? `${formatJobType(p.jobType)}\n${p.jobId}` : ''
+}
+
+function JobPassRateChart({ jobs }: { jobs: CheckerPassRateJob[] }) {
+  const data = jobs.map((j) => ({
+    label: `${formatJobType(j.jobType)} (${j.jobId.slice(0, 8)}...)`,
+    passRate: j.passRate,
+    jobId: j.jobId,
+    jobType: j.jobType,
+    total: j.totalCheckerResults,
+    passed: j.passedCheckerResults,
+  }))
+
+  return (
+    <div>
+      <div className="mb-2 text-sm font-semibold text-[#172033]">Per-Job Pass Rate</div>
+      <ResponsiveContainer width="100%" height={Math.max(data.length * 52, 60)}>
+        <BarChart data={data} layout="vertical" margin={{ top: 0, right: 24, bottom: 0, left: 0 }}>
+          <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 11 }} tickFormatter={(v) => `${v}%`} />
+          <YAxis type="category" dataKey="label" tick={{ fontSize: 11 }} width={170} />
+          <Tooltip
+            formatter={(value) => [`${Number(value).toFixed(1)}%`, 'Pass Rate']}
+            labelFormatter={(_label, payload: unknown) => getJobTooltipLabel(payload)}
+          />
+          <Bar dataKey="passRate" radius={[0, 4, 4, 0]} label={{ position: 'right', fontSize: 11, formatter: (v: unknown) => `${Number(v).toFixed(1)}%` }}>
+            {data.map((entry) => (
+              <Cell key={entry.jobId} fill={passRateThresholds(entry.passRate).hex} />
+            ))}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
+
+function formatLargeNumber(value: number): string {
+  if (value >= 1_000_000) return `${parseFloat((value / 1_000_000).toFixed(1))}M`
+  if (value >= 1_000) return `${parseFloat((value / 1_000).toFixed(1))}K`
+  return String(value)
+}
+
+function TokenMetricsPanel({ data }: { data: TokenCostResponse }) {
+  return (
+    <div className="grid grid-cols-2 gap-3 p-4 pt-0">
+      <MetricCard label="Total Tokens" value={formatLargeNumber(
+        data.metrics.llmPromptTokens + data.metrics.llmCompletionTokens +
+        data.metrics.toolPromptTokens + data.metrics.toolCompletionTokens
+      )} />
+      <MetricCard label="LLM Tokens" value={formatLargeNumber(
+        data.metrics.llmPromptTokens + data.metrics.llmCompletionTokens
+      )} />
+      <MetricCard label="Tool Tokens" value={formatLargeNumber(
+        data.metrics.toolPromptTokens + data.metrics.toolCompletionTokens
+      )} />
+      <MetricCard
+        label="Prompt / Completion"
+        value={`${formatLargeNumber(data.metrics.llmPromptTokens)} / ${formatLargeNumber(data.metrics.llmCompletionTokens)}`}
+        small
+      />
+      <MetricCard
+        label="LLM / Tool Calls"
+        value={`${data.metrics.llmCallCount} / ${data.metrics.toolCallCount}`}
+        small
+      />
+    </div>
+  )
+}
+
+function CheckerPassRatePanel({ data }: { data: CheckerPassRateResponse }) {
+  return (
+    <div className="space-y-3 p-4 pt-0">
+      <PassRateCard rate={data.passRate} />
+      <div className="grid grid-cols-2 gap-3">
+        <MetricCard label="Total Checker Results" value={data.totalCheckerResults} />
+        <MetricCard label="Passed Results" value={data.passedCheckerResults} />
+      </div>
+      {data.jobs != null && data.jobs.length > 0 && <JobPassRateChart jobs={data.jobs} />}
+    </div>
+  )
 }

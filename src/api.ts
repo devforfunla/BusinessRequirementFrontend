@@ -1054,11 +1054,20 @@ export type TokenCostResponse = {
   }
 }
 
+export type CheckerPassRateJob = {
+  jobId: string
+  jobType: string
+  passRate: number
+  totalCheckerResults: number
+  passedCheckerResults: number
+}
+
 export type CheckerPassRateResponse = {
   workflowId: string
-  totalRulesExtracted: number
-  rulesPassedCheck: number
   passRate: number
+  totalCheckerResults: number
+  passedCheckerResults: number
+  jobs: CheckerPassRateJob[]
 }
 
 export const metricsApi = {
