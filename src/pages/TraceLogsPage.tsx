@@ -2,9 +2,9 @@ import { useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Activity, AlertTriangle, GitBranch, RefreshCw, Search } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
-import { getErrorMessage, traceLogsApi, type JobTraceSummary, type LlmCallTrace } from '../api'
+import { getErrorMessage, traceLogsApi, type JobTraceResponse, type JobTraceSummary, type LlmCallTrace } from '../api'
 import { Button, EmptyState, ErrorNotice, JsonBlock, Label, PageTitle, Panel, PanelHeader, SourcesList, StatusPill, TextInput } from '../components/ui'
-import { formatDate } from '../utils'
+import { cn, formatDate } from '../utils'
 
 export function TraceLogsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -176,7 +176,7 @@ function JobRow({
     <div>
       <button
         onClick={onToggle}
-        className={`flex w-full cursor-pointer items-center gap-3 px-4 py-2.5 text-left text-sm hover:bg-[#f8fafc] ${isFailed ? 'border-l-2 border-l-[#f7b4ae]' : ''}`}
+        className={cn('flex w-full cursor-pointer items-center gap-3 px-4 py-2.5 text-left text-sm hover:bg-[#f8fafc]', isFailed && 'border-l-2 border-l-[#f7b4ae]')}
       >
         <span className="min-w-[140px] font-medium text-[#172033]">{job.jobType}</span>
         <StatusPill value={job.status} />
@@ -185,11 +185,7 @@ function JobRow({
           <AlertTriangle className="h-3.5 w-3.5 text-[#b42318]" />
         ) : null}
         {job.errorMessage ? (
-          <span className="truncate text-xs text-[#667085]">
-            {job.errorMessage.length > 120
-              ? job.errorMessage.slice(0, 120) + '…'
-              : job.errorMessage}
-          </span>
+          <span className="truncate text-xs text-[#667085]">{job.errorMessage}</span>
         ) : null}
       </button>
 
@@ -208,7 +204,7 @@ function JobRow({
   )
 }
 
-function JobTraceDetail({ trace }: { trace: Awaited<ReturnType<typeof traceLogsApi.getByJobId>> }) {
+function JobTraceDetail({ trace }: { trace: JobTraceResponse }) {
   return (
     <div className="space-y-4">
       <div className="grid gap-4 lg:grid-cols-4">
