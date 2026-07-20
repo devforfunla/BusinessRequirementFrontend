@@ -538,6 +538,26 @@ export type WorkflowTraceRecord = {
   updatedAt?: string | null
 }
 
+export type JobTraceSummary = {
+  id: string
+  jobType: string
+  status: string
+  errorMessage?: string | null
+  createdAt: string
+}
+
+export type WorkflowTraceAggregate = {
+  totalJobs: number
+  failedJobs: number
+  hasUnknownTerms: boolean
+}
+
+export type WorkflowTraceResponse = {
+  workflow: WorkflowTraceRecord
+  jobs: JobTraceSummary[]
+  aggregate: WorkflowTraceAggregate
+}
+
 export type LlmAgentSession = {
   id: string
   jobId: string
@@ -1002,6 +1022,8 @@ export const applicationLogsApi = {
 export const traceLogsApi = {
   getByJobId: (jobId: string) =>
     fromResponse<JobTraceResponse>(http.get(`/trace/jobs/${encodeURIComponent(jobId)}`)),
+  getByWorkflowId: (workflowId: string) =>
+    fromResponse<WorkflowTraceResponse>(http.get(`/trace/workflows/${encodeURIComponent(workflowId)}`)),
 }
 
 // ---------------------------------------------------------------------------
