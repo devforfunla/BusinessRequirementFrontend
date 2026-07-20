@@ -1,0 +1,539 @@
+# Workflow Trace Page — Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Replace the job-ID-based trace log page with a workflow-ID-based page showing a job summary table with on-demand drill-down into each job's full trace.
+
+**Architecture:** Two-tier query pattern — `GET /trace/workflows/{workflowId}` for the job list + aggregate signals, then lazy `GET /trace/jobs/{jobId}` when a row is expanded. The existing `LlmCalls` component and all rendering primitives are reused unchanged.
+
+**Tech Stack:** React 19 + TypeScript + Tailwind v4 + TanStack Query 5 + Lucide React + React Router 7
+
+---
+
+## File Structure
+
+| File | Change | Responsibility |
+|---|---|---|
+| `src/api.ts` | Modify | Add `JobTraceSummary`, `WorkflowTraceAggregate`, `WorkflowTraceResponse` types; add `getByWorkflowId` to `traceLogsApi` |
+| `src/pages/TraceLogsPage.tsx` | Rewrite | Workflow ID search, aggregate bar, job summary table, expandable drill-down rows |
+
+---
+
+### Task 1: Add types and API function
+
+**Files:**
+- Modify: `src/api.ts`
+
+- [ ] **Step 1: Add new types**
+
+After `WorkflowTraceRecord` (line 539) and before `LlmAgentSession`, add:
+
+```typescript
+export type JobTraceSummary = {
+  id: string
+  jobType: string
+  status: string
+  errorMessage?: string | null
+  createdAt: string
+}
+
+export type WorkflowTraceAggregate = {
+  totalJobs: number
+  failedJobs: number
+  hasUnknownTerms: boolean
+}
+
+export type WorkflowTraceResponse = {
+  workflow: WorkflowTraceRecord
+  jobs: JobTraceSummary[]
+  aggregate: WorkflowTraceAggregate
+}
+```
+
+- [ ] **Step 2: Add `getByWorkflowId` to `traceLogsApi`**
+
+At line 1002-1005, add the new method:
+
+```typescript
+export const traceLogsApi = {
+  getByJobId: (jobId: string) =>
+    fromResponse<JobTraceResponse>(http.get(`/trace/jobs/${encodeURIComponent(jobId)}`)),
+  getByWorkflowId: (workflowId: string) =>
+    fromResponse<WorkflowTraceResponse>(http.get(`/trace/workflows/${encodeURIComponent(workflowId)}`)),
+}
+```
+
+- [ ] **Step 3: Verify build**
+
+Run: `npm run build`
+Expected: no new type errors (pre-existing errors in ReviewWorkbenchPage/WorkflowOverviewPage are OK).
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add src/api.ts
+git commit -m "feat: add workflow trace types and API function"
+```
+
+---
+
+### Task 2: Rewrite TraceLogsPage with workflow search and job table
+
+**Files:**
+- Modify: `src/pages/TraceLogsPage.tsx`
+
+This is a full page rewrite. The existing `LlmCalls`, `PayloadDetails`, `TraceField`, `formatDuration`, and `formatTokens` helper functions/components are preserved and reused.
+
+- [ ] **Step 1: Write the new page**
+
+Replace the entire file with:
+
+```typescript
+import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { Activity, AlertTriangle, GitBranch, RefreshCw, Search } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
+import { getErrorMessage, traceLogsApi, type JobTraceSummary, type LlmCallTrace } from '../api'
+import { Button, EmptyState, ErrorNotice, JsonBlock, Label, PageTitle, Panel, PanelHeader, SourcesList, StatusPill, TextInput } from '../components/ui'
+import { formatDate } from '../utils'
+
+export function TraceLogsPage() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const initialWorkflowId = searchParams.get('workflowId') || ''
+  const [workflowId, setWorkflowId] = useState(initialWorkflowId)
+  const [submittedWorkflowId, setSubmittedWorkflowId] = useState(initialWorkflowId)
+  const [expandedJobId, setExpandedJobId] = useState<string | null>(null)
+
+  const workflowTraceQuery = useQuery({
+    queryKey: ['trace-workflow', submittedWorkflowId],
+    queryFn: () => traceLogsApi.getByWorkflowId(submittedWorkflowId),
+    enabled: Boolean(submittedWorkflowId),
+  })
+
+  const workflowTrace = workflowTraceQuery.data
+
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const nextId = workflowId.trim()
+    setSubmittedWorkflowId(nextId)
+    setExpandedJobId(null)
+    setSearchParams(nextId ? { workflowId: nextId } : {})
+  }
+
+  return (
+    <div className="space-y-5">
+      <PageTitle
+        title="Trace Logs"
+        description="View all jobs and agent sessions for a workflow."
+        actions={
+          <Button
+            onClick={() => void workflowTraceQuery.refetch()}
+            disabled={!submittedWorkflowId || workflowTraceQuery.isFetching}
+          >
+            <RefreshCw className="h-4 w-4" aria-hidden="true" />
+            Refresh
+          </Button>
+        }
+      />
+
+      <Panel>
+        <PanelHeader
+          title="Workflow Search"
+          description="Enter a workflow ID to view its trace."
+        />
+        <form
+          onSubmit={handleSubmit}
+          className="grid gap-3 p-4 md:grid-cols-[1fr_auto] md:items-end"
+        >
+          <Label label="Workflow ID">
+            <div className="relative">
+              <Search
+                className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-[#98a2b3]"
+                aria-hidden="true"
+              />
+              <TextInput
+                className="pl-9 font-mono"
+                value={workflowId}
+                onChange={(event) => setWorkflowId(event.target.value)}
+              />
+            </div>
+          </Label>
+          <Button type="submit" variant="primary" disabled={!workflowId.trim()}>
+            <Search className="h-4 w-4" aria-hidden="true" />
+            Search
+          </Button>
+        </form>
+      </Panel>
+
+      {!submittedWorkflowId ? (
+        <EmptyState title="No workflow selected" description="Enter a workflow ID to load its trace." />
+      ) : null}
+
+      {workflowTraceQuery.isError ? (
+        <ErrorNotice message={getErrorMessage(workflowTraceQuery.error)} />
+      ) : null}
+
+      {workflowTrace ? (
+        <>
+          <Panel>
+            <PanelHeader
+              title="Workflow"
+              description={workflowTrace.workflow.id}
+              actions={<StatusPill value={workflowTrace.workflow.status} />}
+            />
+            <div className="grid gap-4 p-4 lg:grid-cols-4">
+              <TraceField
+                label="Workflow ID"
+                value={workflowTrace.workflow.id}
+                mono
+                icon={<GitBranch className="h-4 w-4" />}
+              />
+              <TraceField label="Document" value={workflowTrace.workflow.documentId} mono />
+              <TraceField label="Triggered By" value={workflowTrace.workflow.triggeredBy || '-'} />
+              <TraceField label="Created" value={formatDate(workflowTrace.workflow.createdAt)} />
+            </div>
+          </Panel>
+
+          <Panel>
+            <PanelHeader
+              title="Jobs"
+              description={`${workflowTrace.aggregate.totalJobs} job${workflowTrace.aggregate.totalJobs === 1 ? '' : 's'}`}
+            />
+            <div className="flex flex-wrap items-center gap-3 border-b border-[#e3e8f0] px-4 py-2">
+              <span className="text-sm text-[#667085]">
+                {workflowTrace.aggregate.totalJobs} total
+              </span>
+              {workflowTrace.aggregate.failedJobs > 0 ? (
+                <span className="rounded border border-[#f7b4ae] bg-[#fff1f0] px-2 py-0.5 text-xs font-medium text-[#b42318]">
+                  {workflowTrace.aggregate.failedJobs} failed
+                </span>
+              ) : null}
+              {workflowTrace.aggregate.hasUnknownTerms ? (
+                <span className="inline-flex items-center gap-1 rounded border border-[#f7b4ae] bg-[#fff1f0] px-2 py-0.5 text-xs font-medium text-[#b42318]">
+                  <AlertTriangle className="h-3 w-3" />
+                  Knowledge Gaps
+                </span>
+              ) : null}
+            </div>
+
+            {workflowTrace.jobs.length === 0 ? (
+              <div className="p-4">
+                <EmptyState title="No jobs found for this workflow" />
+              </div>
+            ) : (
+              <div className="divide-y divide-[#e3e8f0]">
+                {workflowTrace.jobs.map((job) => (
+                  <JobRow
+                    key={job.id}
+                    job={job}
+                    isExpanded={expandedJobId === job.id}
+                    onToggle={() =>
+                      setExpandedJobId(expandedJobId === job.id ? null : job.id)
+                    }
+                  />
+                ))}
+              </div>
+            )}
+          </Panel>
+        </>
+      ) : null}
+    </div>
+  )
+}
+
+function JobRow({
+  job,
+  isExpanded,
+  onToggle,
+}: {
+  job: JobTraceSummary
+  isExpanded: boolean
+  onToggle: () => void
+}) {
+  const jobTraceQuery = useQuery({
+    queryKey: ['trace-log', job.id],
+    queryFn: () => traceLogsApi.getByJobId(job.id),
+    enabled: isExpanded,
+  })
+
+  const isFailed = job.status === 'FAILED' || job.status === 'FAILED_UNKNOWN_TERMS'
+  const hasUnknownTerms = job.status === 'FAILED_UNKNOWN_TERMS'
+
+  return (
+    <div>
+      <button
+        onClick={onToggle}
+        className={`flex w-full cursor-pointer items-center gap-3 px-4 py-2.5 text-left text-sm hover:bg-[#f8fafc] ${isFailed ? 'border-l-2 border-l-[#f7b4ae]' : ''}`}
+      >
+        <span className="min-w-[140px] font-medium text-[#172033]">{job.jobType}</span>
+        <StatusPill value={job.status} />
+        <span className="text-xs text-[#98a2b3]">{formatDate(job.createdAt)}</span>
+        {hasUnknownTerms ? (
+          <AlertTriangle className="h-3.5 w-3.5 text-[#b42318]" />
+        ) : null}
+        {job.errorMessage ? (
+          <span className="truncate text-xs text-[#667085]">
+            {job.errorMessage.length > 120
+              ? job.errorMessage.slice(0, 120) + '…'
+              : job.errorMessage}
+          </span>
+        ) : null}
+      </button>
+
+      {isExpanded ? (
+        <div className="border-t border-[#e3e8f0] bg-[#f8fafc] p-4">
+          {jobTraceQuery.isLoading ? (
+            <p className="py-4 text-center text-sm text-[#667085]">Loading job trace…</p>
+          ) : jobTraceQuery.isError ? (
+            <ErrorNotice message={getErrorMessage(jobTraceQuery.error)} />
+          ) : jobTraceQuery.data ? (
+            <JobTraceDetail trace={jobTraceQuery.data} />
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+function JobTraceDetail({ trace }: { trace: Awaited<ReturnType<typeof traceLogsApi.getByJobId>> }) {
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-4 lg:grid-cols-4">
+        <TraceField label="Job ID" value={trace.job.id} mono />
+        <TraceField label="Workflow" value={trace.job.workflowId || '-'} mono />
+        <TraceField label="Document" value={trace.job.documentId || '-'} mono />
+        <TraceField label="Updated" value={formatDate(trace.job.updatedAt)} />
+      </div>
+      {trace.job.errorMessage || trace.job.inputPayload || trace.job.resultPayload ? (
+        <div className="space-y-2">
+          {trace.job.errorMessage ? <ErrorNotice message={trace.job.errorMessage} /> : null}
+          <PayloadDetails title="Input Payload" value={trace.job.inputPayload} />
+          <PayloadDetails title="Result Payload" value={trace.job.resultPayload} />
+        </div>
+      ) : null}
+
+      <div className="border-t border-[#e3e8f0] pt-4">
+        <h4 className="mb-2 text-sm font-semibold text-[#344054]">
+          Agent Sessions ({trace.agentSessions.length})
+        </h4>
+        {trace.agentSessions.length === 0 ? (
+          <EmptyState title="No agent sessions found" />
+        ) : (
+          <div className="space-y-3">
+            {trace.agentSessions.map((agentTrace) => (
+              <section key={agentTrace.session.id} className="rounded-md border border-[#d8dee8] bg-white p-3">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <Activity className="h-4 w-4 text-[#667085]" aria-hidden="true" />
+                      <h3 className="truncate font-semibold text-[#172033]">
+                        {agentTrace.session.skillName || agentTrace.session.jobType}
+                      </h3>
+                      <StatusPill value={agentTrace.session.finalStatus} />
+                    </div>
+                    <p className="mt-1 font-mono text-xs text-[#667085]">{agentTrace.session.id}</p>
+                  </div>
+                  <div className="grid gap-2 text-right text-xs text-[#667085] sm:grid-cols-3">
+                    <span>{agentTrace.session.model || '-'}</span>
+                    <span>{formatDuration(agentTrace.session.totalDurationMs)}</span>
+                    <span>{formatTokens(agentTrace.session.totalTokens)}</span>
+                  </div>
+                </div>
+
+                <div className="mt-2 grid gap-3 lg:grid-cols-4">
+                  <TraceField label="Rounds" value={agentTrace.session.totalRounds ?? '-'} />
+                  <TraceField
+                    label="Validation"
+                    value={agentTrace.session.validationPassed == null ? '-' : String(agentTrace.session.validationPassed)}
+                  />
+                  <TraceField label="Created" value={formatDate(agentTrace.session.createdAt)} />
+                  <TraceField label="Completed" value={formatDate(agentTrace.session.completedAt)} />
+                </div>
+
+                {agentTrace.session.finalValidationMessage ? (
+                  <div className="mt-2 rounded-md border border-[#d8dee8] bg-[#f8fafc] px-3 py-2 text-sm text-[#475467]">
+                    {agentTrace.session.finalValidationMessage}
+                  </div>
+                ) : null}
+
+                {agentTrace.session.finalStatus === 'FAILED_UNKNOWN_TERMS' &&
+                agentTrace.unknownTerms.length > 0 ? (
+                  <div className="mt-2 rounded-md border border-[#f7b4ae] bg-[#fff1f0] px-4 py-3">
+                    <h4 className="text-sm font-semibold text-[#b42318]">
+                      Knowledge Gap — {agentTrace.unknownTerms.length} term
+                      {agentTrace.unknownTerms.length === 1 ? '' : 's'}
+                    </h4>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {agentTrace.unknownTerms.map((term, i) => (
+                        <span
+                          key={i}
+                          className="rounded border border-[#f7b4ae] bg-white px-2 py-0.5 text-xs text-[#b42318]"
+                          title={term.reason}
+                        >
+                          {term.query}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="mt-2">
+                  <LlmCalls calls={agentTrace.llmCalls} />
+                </div>
+              </section>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {trace.unscopedLlmCalls.length > 0 ? (
+        <div className="border-t border-[#e3e8f0] pt-4">
+          <h4 className="mb-2 text-sm font-semibold text-[#344054]">
+            Unscoped LLM Calls ({trace.unscopedLlmCalls.length})
+          </h4>
+          <LlmCalls calls={trace.unscopedLlmCalls} />
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+// --- Preserved helper components (unchanged from original) ---
+
+function LlmCalls({ calls }: { calls: LlmCallTrace[] }) {
+  if (calls.length === 0) {
+    return <EmptyState title="No LLM audit calls found" />
+  }
+
+  return (
+    <div className="space-y-2">
+      <h4 className="text-sm font-semibold text-[#344054]">LLM Audit</h4>
+      <div className="space-y-2">
+        {calls.map((trace) => (
+          <details key={trace.call.id} className="rounded-md border border-[#d8dee8] bg-white">
+            <summary className="grid cursor-pointer gap-3 px-3 py-2 text-sm hover:bg-[#f8fafc] md:grid-cols-[110px_1fr_120px_110px_120px] md:items-center">
+              <span className="font-medium text-[#172033]">Round {trace.call.iterationRound ?? '-'}</span>
+              <span className="min-w-0 truncate font-mono text-xs text-[#667085]">{trace.call.llmCallId}</span>
+              <StatusPill value={trace.call.status} />
+              <span className="text-xs text-[#667085]">{formatDuration(trace.call.durationMs)}</span>
+              <span className="text-xs text-[#667085]">{formatTokens(trace.call.totalTokens)}</span>
+            </summary>
+            <div className="space-y-3 border-t border-[#e3e8f0] p-3">
+              <div className="grid gap-3 lg:grid-cols-4">
+                <TraceField label="Model" value={trace.call.model} />
+                <TraceField label="Retry Count" value={trace.call.retryCount ?? 0} />
+                <TraceField label="Created" value={formatDate(trace.call.createdAt)} />
+                <TraceField label="Prompt Tokens" value={trace.call.promptTokens ?? '-'} />
+              </div>
+              {trace.call.errorMessage ? <ErrorNotice message={trace.call.errorMessage} /> : null}
+              <PayloadDetails title="Prompt" value={trace.call.prompt} />
+              <PayloadDetails title="Response" value={trace.call.response} />
+
+              {trace.toolCalls.length > 0 && (
+                <div className="space-y-2">
+                  <h5 className="text-xs font-semibold uppercase text-[#667085]">
+                    Tool Calls ({trace.toolCalls.length})
+                  </h5>
+                  {trace.toolCalls.map((tc) => (
+                    <details key={tc.id} className="rounded-md border border-[#d8dee8] bg-white">
+                      <summary className="flex cursor-pointer items-center gap-3 px-3 py-1.5 text-xs hover:bg-[#f8fafc]">
+                        <span className="font-medium text-[#172033]">{tc.toolName}</span>
+                        <StatusPill value={tc.status} />
+                        <span className="text-[#667085]">{formatDuration(tc.durationMs)}</span>
+                        <span className="text-[#98a2b3]">{formatDate(tc.createdAt)}</span>
+                      </summary>
+                      <div className="space-y-2 border-t border-[#e3e8f0] p-3">
+                        {tc.errorMessage ? <ErrorNotice message={tc.errorMessage} /> : null}
+                        <PayloadDetails title="Request" value={tc.requestJson} />
+                        {tc.responseJson ? <PayloadDetails title="Response" value={tc.responseJson} /> : null}
+                        <SourcesList sourcesJson={tc.sourcesJson} />
+                      </div>
+                    </details>
+                  ))}
+                </div>
+              )}
+            </div>
+          </details>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function PayloadDetails({ title, value }: { title: string; value?: string | null }) {
+  if (!value) return null
+  return (
+    <details className="rounded-md border border-[#d8dee8] bg-[#f8fafc]">
+      <summary className="cursor-pointer px-3 py-2 text-sm font-medium text-[#344054]">{title}</summary>
+      <div className="border-t border-[#e3e8f0] p-3">
+        <JsonBlock value={value} className="max-h-[420px]" />
+      </div>
+    </details>
+  )
+}
+
+function TraceField({
+  label,
+  value,
+  mono,
+  icon,
+}: {
+  label: string
+  value: string | number
+  mono?: boolean
+  icon?: React.ReactNode
+}) {
+  return (
+    <div className="min-w-0 rounded-md border border-[#e3e8f0] bg-[#f8fafc] px-3 py-2">
+      <div className="flex items-center gap-1.5 text-xs font-medium uppercase text-[#667085]">
+        {icon}
+        {label}
+      </div>
+      <div className={mono ? 'mt-1 truncate font-mono text-xs text-[#172033]' : 'mt-1 truncate text-sm text-[#172033]'}>{value}</div>
+    </div>
+  )
+}
+
+function formatDuration(value?: number | null) {
+  if (value == null) return '-'
+  if (value < 1000) return `${value} ms`
+  return `${(value / 1000).toFixed(1)} s`
+}
+
+function formatTokens(value?: number | null) {
+  if (value == null) return '-'
+  return `${value.toLocaleString()} tokens`
+}
+```
+
+- [ ] **Step 2: Verify build and lint**
+
+Run: `npm run build && npm run lint`
+Expected: no new errors (pre-existing errors in ReviewWorkbenchPage/WorkflowOverviewPage are OK).
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add src/pages/TraceLogsPage.tsx
+git commit -m "feat: replace job trace page with workflow trace page"
+```
+
+---
+
+### Task 3: Final verification
+
+- [ ] **Step 1: Full build + lint**
+
+Run: `npm run build && npm run lint`
+Expected: both pass cleanly (pre-existing errors OK).
+
+- [ ] **Step 2: Manual review**
+
+Run: `npm run dev` (requires backend on :8080)
+- Navigate to trace page
+- Enter a workflow ID and search
+- Verify job table renders with aggregate stats
+- Click a job row to expand drill-down
+- Verify sessions, LLM calls, tool calls, unknown terms, and sources render correctly
+- Click the same row again to collapse
+- Click a different row to switch expansion
