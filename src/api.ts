@@ -14,6 +14,7 @@ export type DocumentRecord = {
   structuredMarkdown?: string | null
   transformModelVersion?: string | null
   transformTimestamp?: string | null
+  errorMessage?: string | null
   createdAt?: string | null
   updatedAt?: string | null
 }
@@ -38,15 +39,32 @@ export type JobResponse = {
 
 export type AsyncJob = {
   id: string
+  batchId?: string | null
   workflowId?: string | null
   documentId?: string | null
   jobType: string
   status: string
+  derivedStatus?: string | null
   inputPayload?: string | null
   resultPayload?: string | null
   errorMessage?: string | null
+  triggeredByJobId?: string | null
+  latestMakerJobId?: string | null
   createdAt?: string | null
   updatedAt?: string | null
+}
+
+export type ExtractionGroup = {
+  id: string
+  jobId: string
+  workflowId: string
+  groupPrefix: string
+  semanticRuleIds?: string | null
+  semanticRuleCount: number
+  status: string
+  atomicRulesCount: number
+  errorMessage?: string | null
+  createdAt?: string | null
 }
 
 export type WorkflowRecord = {
@@ -54,6 +72,7 @@ export type WorkflowRecord = {
   documentId: string
   triggeredBy?: string | null
   status: string
+  currentStage?: string | null
   atomicMakerSkill?: SkillSummary | null
   checkerSkill?: SkillSummary | null
   createdAt?: string | null
@@ -104,6 +123,7 @@ export type AtomicRule = {
   llmSummary?: string | null
   llmSection?: string | null
   humanInterventionId?: string | null
+  makerJobId?: string | null
   createdAt?: string | null
   updatedAt?: string | null
 }
@@ -120,6 +140,19 @@ export type AtomicRuleOperationResponse = {
   humanInterventionId?: string | null
   createdAt?: string | null
   updatedAt?: string | null
+}
+
+export type FieldDiff = {
+  changed: boolean
+  oldValue?: string | null
+  newValue?: string | null
+}
+
+export type RuleCompareResponse = {
+  atomicRuleCode: string
+  version1: AtomicRule
+  version2: AtomicRule
+  diff: Record<string, FieldDiff>
 }
 
 export type CheckerRun = {
@@ -167,6 +200,283 @@ export type AtomicCheckerResult = {
   llmReviewEntry?: string | null
   checkedAt?: string | null
   model?: string | null
+}
+
+export type TcgSourceRuleReference = {
+  atomicRuleId: string
+  ruleId: string
+  versionNumber: number
+}
+
+export type TcgDependencyReference = {
+  id: string
+  category: string
+  title: string
+  version?: string | null
+  sourceLocation?: string | null
+  owningSystem?: string | null
+  owningTeam?: string | null
+  summary?: string | null
+  relevance?: string | null
+  usageRole: string
+}
+
+export type TcgPreferenceReference = {
+  preferenceId: string
+  ownerTeam?: string | null
+  version?: string | null
+  appliesTo?: string | null
+  mandatory?: boolean | null
+  preferenceStatement?: string | null
+  expectedTestCaseTypes?: string[] | null
+  checkerRules?: string[] | null
+  scoringImpact?: string | null
+}
+
+export type TcgGenerationRequest = {
+  workflowId: string
+  sourceRules: TcgSourceRuleReference[]
+  referencePackage?: TcgDependencyReference[]
+  teamPreferences?: TcgPreferenceReference[]
+  generationMode?: string | null
+  reviewerId: string
+}
+
+export type TcgTestIntent = {
+  id: string
+  testIntentId: string
+  workflowId: string
+  generationJobId: string
+  businessCapabilityId?: string | null
+  testLevel: string
+  intentType: string
+  readinessStatus: string
+  blockedReason?: string | null
+  sourceRules?: string | null
+  intentJson: string
+  createdAt?: string | null
+}
+
+export type TcgGeneratedTestCase = {
+  id: string
+  testCaseId: string
+  versionNumber: number
+  isLatest: boolean
+  changeType: string
+  parentVersionId?: string | null
+  revisionJobId?: string | null
+  workflowId: string
+  atomicRuleId: string
+  ruleId: string
+  sourceVersionNumber: number
+  semanticRuleId: string
+  testIntentId?: string | null
+  generationJobId: string
+  title: string
+  scenarioType: string
+  priority: string
+  preconditions?: string | null
+  steps?: string | null
+  expectedResults?: string | null
+  dependencyTraceability?: string | null
+  assumptions?: string | null
+  unsupportedInferences?: string | null
+  openQuestions?: string | null
+  normalizedTestCaseJson?: string | null
+  status: string
+  createdAt?: string | null
+  updatedAt?: string | null
+}
+
+export type TcgCheckerResult = {
+  id: string
+  workflowId: string
+  targetTestCaseId: string
+  atomicRuleId?: string | null
+  testIntentId?: string | null
+  checkerJobId: string
+  isPassing: boolean
+  totalScore: number
+  dimensionScores?: string | null
+  findings?: string | null
+  recommendedActions?: string | null
+  blockingCategory?: string | null
+  benchmarkProfile?: string | null
+  checkedAt?: string | null
+}
+
+export type TcgConfidenceDecision = {
+  id: string
+  workflowId: string
+  targetTestCaseId: string
+  atomicRuleId?: string | null
+  testIntentId?: string | null
+  checkerJobId?: string | null
+  confidenceLevel: string
+  rationale?: string | null
+  reviewerId?: string | null
+  decidedAt?: string | null
+}
+
+export type TcgReviewAction = 'verify' | 'reject' | 'approve'
+
+export type TcgReviewRequest = {
+  body: JsonRecord
+  headers: Record<string, string>
+}
+
+export type BddGenerationRequest = {
+  workflowId: string
+  testCaseIds: string[]
+  generationMode?: string | null
+  reviewerId: string
+}
+
+export type GeneratedBddScenario = {
+  id: string
+  workflowId: string
+  generatedTestCaseId: string
+  atomicRuleId: string
+  ruleId: string
+  sourceVersionNumber: number
+  generationJobId: string
+  featureTitle: string
+  scenarioTitle: string
+  normalizedBdd: string
+  gherkinText: string
+  assumptions?: string | null
+  traceability?: string | null
+  staleAt?: string | null
+  staleReason?: string | null
+  supersededByTestCaseVersionId?: string | null
+  status: string
+  createdAt?: string | null
+  updatedAt?: string | null
+}
+
+export type TestCaseGenerationBatch = {
+  id: string
+  sourceWorkflowId: string
+  sourceDocumentId?: string | null
+  sourceRulesSnapshot?: string | null
+  triggeredBy?: string | null
+  makerSkillId?: string | null
+  checkerSkillId?: string | null
+  status: string
+  createdAt?: string | null
+  updatedAt?: string | null
+}
+
+export type GeneratedTestCase = {
+  id: string
+  batchId: string
+  sourceAtomicRuleId: string
+  sourceAtomicRuleCode?: string | null
+  sourceSemanticRuleCode?: string | null
+  calcTestCaseCode?: string | null
+  llmTestCaseTitle?: string | null
+  llmObjective?: string | null
+  llmRuleUnderTest?: string | null
+  llmPreconditions?: string | null
+  llmTestSteps?: string | null
+  llmExpectedResult?: string | null
+  llmTestData?: string | null
+  llmVariants?: string | null
+  llmAssumptions?: string | null
+  llmTraceability?: string | null
+  llmPriority?: string | null
+  llmTestType?: string | null
+  llmOutputJson?: string | null
+  makerJobId?: string | null
+  testCaseVersion: number
+  isLatest: boolean
+  approvalStatus: string
+  createdAt?: string | null
+  updatedAt?: string | null
+}
+
+export type TestCaseCheckerRun = {
+  id: string
+  checkerJobId: string
+  batchId: string
+  checkScope?: string | null
+  sourceSemanticRuleCode?: string | null
+  targetTestCaseId?: string | null
+  llmHighLevelFeedback?: string | null
+  llmRunFindings?: string | null
+  llmRecommendations?: string | null
+  calcGovernanceGate?: string | null
+  calcSummaryJson?: string | null
+  calcGovernanceMetricsJson?: string | null
+  calcRecommendedAction?: string | null
+  rawOutputJson?: string | null
+  model?: string | null
+  checkedAt?: string | null
+}
+
+export type TestCaseCheckerResult = {
+  id: string
+  checkerRunId: string
+  checkerJobId: string
+  batchId: string
+  targetTestCaseId: string
+  sourceAtomicRuleId?: string | null
+  sourceAtomicRuleCode?: string | null
+  sourceSemanticRuleCode?: string | null
+  llmFindings?: string | null
+  llmDimensionReviews?: string | null
+  llmRecommendations?: string | null
+  llmReviewEntry?: string | null
+  calcIsPassing?: string | null
+  calcQualityScore?: string | null
+  calcBlockingCategory?: string | null
+  calcRecommendedAction?: string | null
+  model?: string | null
+  checkedAt?: string | null
+}
+
+export type TestCaseGenerationResponse = {
+  jobId: string
+  batchId: string
+  status: string
+}
+
+export type TestCaseJobResponse = {
+  id: string
+  batchId: string
+  jobType: string
+  status: string
+  inputPayload?: string | null
+  resultPayload?: string | null
+  errorMessage?: string | null
+  createdAt?: string | null
+  updatedAt?: string | null
+}
+
+function sortJobsByActivityDesc(jobs: AsyncJob[]) {
+  return [...jobs].sort((a, b) => jobActivityTime(b) - jobActivityTime(a))
+}
+
+function jobActivityTime(job: AsyncJob) {
+  return Date.parse(job.updatedAt || job.createdAt || '') || 0
+}
+
+export type TestCaseRewriteMode = 'CHECKER_FEEDBACK' | 'HUMAN_FEEDBACK'
+
+export type TestCaseEditPayload = {
+  editorId: string
+  title: string
+  objective: string
+  ruleUnderTest?: JsonRecord
+  preconditions?: string[]
+  testData?: JsonRecord
+  testSteps: Array<JsonRecord>
+  expectedResult: string
+  variants?: Array<JsonRecord>
+  priority: string
+  testType: string
+  assumptions?: string[]
+  traceability?: JsonRecord
 }
 
 export type Skill = {
@@ -229,6 +539,28 @@ export type WorkflowTraceRecord = {
   updatedAt?: string | null
 }
 
+export type JobTraceSummary = {
+  id: string
+  jobType: string
+  status: string
+  derivedStatus: string
+  errorMessage?: string | null
+  createdAt: string
+}
+
+export type WorkflowTraceAggregate = {
+  totalJobs: number
+  failedJobs: number
+  successWithUnknownJobs: number
+  failedWithUnknownJobs: number
+}
+
+export type WorkflowTraceResponse = {
+  workflow: WorkflowTraceRecord
+  jobs: JobTraceSummary[]
+  aggregate: WorkflowTraceAggregate
+}
+
 export type LlmAgentSession = {
   id: string
   jobId: string
@@ -271,16 +603,46 @@ export type LlmCallAudit = {
   createdAt?: string | null
 }
 
+export type ToolCallAudit = {
+  id: string
+  agentSessionId?: string | null
+  llmCallId?: string | null
+  workflowId?: string | null
+  jobId?: string | null
+  jobType: string
+  iterationRound?: number | null
+  toolName: string
+  requestJson: string
+  responseJson?: string | null
+  sourcesJson?: string | null
+  status: string
+  durationMs?: number | null
+  errorMessage?: string | null
+  createdAt: string
+}
+
+export type LlmCallTrace = {
+  call: LlmCallAudit
+  toolCalls: ToolCallAudit[]
+}
+
+export type UnknownTerm = {
+  query: string
+  reason: string
+}
+
 export type AgentTrace = {
   session: LlmAgentSession
-  llmCalls: LlmCallAudit[]
+  llmCalls: LlmCallTrace[]
+  unknownTerms: UnknownTerm[]
 }
 
 export type JobTraceResponse = {
   job: AsyncJob
+  derivedStatus: string
   workflow?: WorkflowTraceRecord | null
   agentSessions: AgentTrace[]
-  unscopedLlmCalls: LlmCallAudit[]
+  unscopedLlmCalls: LlmCallTrace[]
 }
 
 const http = axios.create({
@@ -290,10 +652,25 @@ const http = axios.create({
   },
 })
 
+const testCaseHttp = axios.create({
+  baseURL: '/testcase-api/v1',
+  headers: {
+    Accept: 'application/json',
+  },
+})
+
 const fromResponse = <T>(request: Promise<{ data: T }>) => request.then((response) => response.data)
 
 const optionalFromResponse = <T>(request: Promise<{ status: number; data: T }>) =>
   request.then((response) => (response.status === 204 ? null : response.data))
+
+const nullableFromResponse = <T>(request: Promise<{ status: number; data: T }>) =>
+  request
+    .then((response) => (response.status === 204 ? null : response.data))
+    .catch((error) => {
+      if (axios.isAxiosError(error) && error.response?.status === 404) return null
+      throw error
+    })
 
 const atomicPath = (path: string) => `/atomic-analysis${path}`
 const semanticPath = (path: string) => `/semantic-analysis${path}`
@@ -329,6 +706,12 @@ export const jobsApi = {
         params: { workflowId, jobType },
       }),
     ),
+  listUnifiedByWorkflow: async (workflowId: string) => {
+    const businessJobs = await jobsApi.listByWorkflow(workflowId)
+    return sortJobsByActivityDesc([
+      ...businessJobs.map((job) => ({ ...job, status: normalizeJobStatus(job.status) })),
+    ])
+  },
   affectedRules: (jobId: string) =>
     fromResponse<JsonRecord>(http.get(atomicPath(`/jobs/${encodeURIComponent(jobId)}/affected-rules`))),
   changes: (jobId: string) => fromResponse<JsonRecord>(http.get(atomicPath(`/jobs/${encodeURIComponent(jobId)}/changes`))),
@@ -337,14 +720,16 @@ export const jobsApi = {
 export const workflowsApi = {
   list: (documentId?: string, activeOnly = true) =>
     fromResponse<WorkflowRecord[]>(
-      http.get(atomicPath('/workflows'), {
+      http.get(businessPath('/workflows'), {
         params: { documentId: documentId || undefined, activeOnly },
       }),
     ),
   get: (workflowId: string) =>
-    fromResponse<WorkflowRecord>(http.get(atomicPath(`/workflows/${encodeURIComponent(workflowId)}`))),
+    fromResponse<WorkflowRecord>(http.get(businessPath(`/workflows/${encodeURIComponent(workflowId)}`))),
   history: (workflowId: string) =>
     fromResponse<ChangeHistoryItem[]>(http.get(atomicPath(`/workflows/${encodeURIComponent(workflowId)}/change-history`))),
+  activate: (workflowId: string) =>
+    fromResponse<WorkflowRecord>(http.post(businessPath(`/workflows/${encodeURIComponent(workflowId)}/activate`))),
 }
 
 export const semanticMakerApi = {
@@ -413,6 +798,10 @@ export const atomicMakerApi = {
         params: { reviewerId },
       }),
     ),
+  extractionGroups: (workflowId: string) =>
+    fromResponse<ExtractionGroup[]>(
+      http.get(atomicPath(`/workflows/${encodeURIComponent(workflowId)}/extraction-groups`)),
+    ),
 }
 
 export const atomicRulesApi = {
@@ -433,25 +822,189 @@ export const atomicRulesApi = {
         editorId,
       }),
     ),
+  compareVersions: (atomicRuleCode: string, workflowId: string, version1: number, version2: number) =>
+    fromResponse<RuleCompareResponse>(
+      http.get(atomicPath(`/atomic-rules/${encodeURIComponent(atomicRuleCode)}/compare`), {
+        params: { workflowId, version1, version2 },
+      }),
+    ),
+  versionHistory: (atomicRuleCode: string, workflowId: string) =>
+    fromResponse<AtomicRule[]>(http.get(atomicPath(`/atomic-rules/${encodeURIComponent(atomicRuleCode)}/versions`), {
+      params: { workflowId },
+    })),
+  bulkApprove: (ruleIds: string[], approverId: string) =>
+    fromResponse<{ approved: number; total: number }>(
+      http.post(atomicPath('/atomic-rules/approve-bulk'), { ruleIds, approverId }),
+    ),
 }
 
 export const atomicCheckerApi = {
   run: (workflowId: string) => fromResponse<JobResponse>(http.post(atomicPath(`/checker/workflow/${encodeURIComponent(workflowId)}`))),
   latestRun: (workflowId: string) =>
     optionalFromResponse<CheckerRun>(http.get(atomicPath(`/checker/workflow/${encodeURIComponent(workflowId)}/latest-run`))),
+  allRuns: (workflowId: string) =>
+    fromResponse<CheckerRun[]>(http.get(atomicPath(`/checker/workflow/${encodeURIComponent(workflowId)}/runs`))),
+  runsByJob: (jobId: string) =>
+    fromResponse<CheckerRun[]>(http.get(atomicPath(`/checker/jobs/${encodeURIComponent(jobId)}/runs`))),
   latestResults: (workflowId: string) =>
     fromResponse<AtomicCheckerResult[]>(http.get(atomicPath(`/checker/workflow/${encodeURIComponent(workflowId)}/latest-results`))),
   latestResultByRule: (ruleId: string) =>
     optionalFromResponse<AtomicCheckerResult>(http.get(atomicPath(`/checker/rules/${encodeURIComponent(ruleId)}/latest-result`))),
 }
 
+export const tcgApi = {
+  submitGenerationJob: (payload: TcgGenerationRequest) =>
+    fromResponse<JobResponse>(http.post(businessPath('/test-case-generation-jobs'), payload)),
+  generationJob: (jobId: string) =>
+    fromResponse<AsyncJob>(http.get(businessPath(`/test-case-generation-jobs/${encodeURIComponent(jobId)}`))),
+  testIntentsByWorkflow: (workflowId: string) =>
+    fromResponse<TcgTestIntent[]>(http.get(businessPath(`/workflows/${encodeURIComponent(workflowId)}/test-intents`))),
+  testCasesByWorkflow: (workflowId: string) =>
+    fromResponse<TcgGeneratedTestCase[]>(http.get(businessPath(`/workflows/${encodeURIComponent(workflowId)}/test-cases`))),
+  checkerResults: (testCaseVersionId: string) =>
+    fromResponse<TcgCheckerResult[]>(http.get(businessPath(`/test-cases/${encodeURIComponent(testCaseVersionId)}/checker-results`))),
+  confidenceDecisions: (testCaseVersionId: string) =>
+    fromResponse<TcgConfidenceDecision[]>(
+      http.get(businessPath(`/test-cases/${encodeURIComponent(testCaseVersionId)}/confidence-decisions`)),
+    ),
+  reviewTestCase: (versionId: string, action: TcgReviewAction, request: TcgReviewRequest) =>
+    fromResponse<TcgGeneratedTestCase>(
+      http.post(businessPath(`/test-cases/${encodeURIComponent(versionId)}/${action}`), request.body, {
+        headers: request.headers,
+      }),
+    ),
+  submitBddGenerationJob: (payload: BddGenerationRequest) =>
+    fromResponse<JobResponse>(http.post(businessPath('/bdd-generation-jobs'), payload)),
+  bddGenerationJob: (jobId: string) =>
+    fromResponse<AsyncJob>(http.get(businessPath(`/bdd-generation-jobs/${encodeURIComponent(jobId)}`))),
+  bddScenariosByWorkflow: (workflowId: string) =>
+    fromResponse<GeneratedBddScenario[]>(http.get(businessPath(`/workflows/${encodeURIComponent(workflowId)}/bdd-scenarios`))),
+  bddScenariosByTestCase: (testCaseVersionId: string) =>
+    fromResponse<GeneratedBddScenario[]>(
+      http.get(businessPath(`/test-cases/${encodeURIComponent(testCaseVersionId)}/bdd-scenarios`)),
+    ),
+}
+
+export const testCaseMakerApi = {
+  generate: (sourceWorkflowId: string, reviewerId: string, confirmReGenerate = false) =>
+    fromResponse<TestCaseGenerationResponse>(
+      testCaseHttp.post('/test-generation/maker/generate', {
+        sourceWorkflowId,
+        reviewerId,
+        confirmReGenerate,
+      }),
+    ),
+}
+
+export const testCaseBatchesApi = {
+  list: (sourceWorkflowId?: string) =>
+    fromResponse<TestCaseGenerationBatch[]>(
+      testCaseHttp.get('/test-generation/batches', {
+        params: { sourceWorkflowId: sourceWorkflowId || undefined },
+      }),
+    ),
+  get: (batchId: string) =>
+    fromResponse<TestCaseGenerationBatch>(testCaseHttp.get(`/test-generation/batches/${encodeURIComponent(batchId)}`)),
+  activate: (batchId: string) =>
+    fromResponse<TestCaseGenerationBatch>(
+      testCaseHttp.post(`/test-generation/batches/${encodeURIComponent(batchId)}/activate`),
+    ),
+}
+
+export const testCaseJobsApi = {
+  get: (jobId: string) => fromResponse<TestCaseJobResponse>(testCaseHttp.get(`/test-generation/jobs/${encodeURIComponent(jobId)}`)),
+  listByBatch: (batchId: string) =>
+    fromResponse<TestCaseJobResponse[]>(
+      testCaseHttp.get('/test-generation/jobs', {
+        params: { batchId },
+      }),
+    ),
+  listBySourceWorkflow: (sourceWorkflowId: string) =>
+    fromResponse<TestCaseJobResponse[]>(
+      testCaseHttp.get('/test-generation/jobs', {
+        params: { sourceWorkflowId },
+      }),
+    ),
+}
+
+export const testCasesApi = {
+  listLatest: () => fromResponse<GeneratedTestCase[]>(testCaseHttp.get('/test-generation/test-cases')),
+  byBatch: (batchId: string, latestOnly = true) =>
+    fromResponse<GeneratedTestCase[]>(
+      testCaseHttp.get(`/test-generation/batches/${encodeURIComponent(batchId)}/test-cases`, {
+        params: { latestOnly },
+      }),
+    ),
+  get: (testCaseId: string) =>
+    fromResponse<GeneratedTestCase>(testCaseHttp.get(`/test-generation/test-cases/${encodeURIComponent(testCaseId)}`)),
+  versions: (sourceAtomicRuleId: string, batchId: string) =>
+    fromResponse<GeneratedTestCase[]>(
+      testCaseHttp.get(`/test-generation/test-cases/${encodeURIComponent(sourceAtomicRuleId)}/versions`, {
+        params: { batchId },
+      }),
+    ),
+  approve: (testCaseId: string) =>
+    fromResponse<GeneratedTestCase>(testCaseHttp.post(`/test-generation/test-cases/${encodeURIComponent(testCaseId)}/approve`)),
+  reject: (testCaseId: string) =>
+    fromResponse<GeneratedTestCase>(testCaseHttp.post(`/test-generation/test-cases/${encodeURIComponent(testCaseId)}/reject`)),
+  reopen: (testCaseId: string) =>
+    fromResponse<GeneratedTestCase>(testCaseHttp.post(`/test-generation/test-cases/${encodeURIComponent(testCaseId)}/reopen`)),
+  editByHuman: (testCaseId: string, payload: TestCaseEditPayload) =>
+    fromResponse<GeneratedTestCase>(
+      testCaseHttp.post(`/test-generation/test-cases/${encodeURIComponent(testCaseId)}/edit-by-human`, payload),
+    ),
+  rewrite: (
+    testCaseId: string,
+    payload: { rewriteMode: TestCaseRewriteMode; humanFeedback?: string; requesterId?: string },
+  ) =>
+    fromResponse<{ jobId: string; status: string }>(
+      testCaseHttp.post(`/test-generation/test-cases/${encodeURIComponent(testCaseId)}/rewrite`, payload),
+    ),
+}
+
+export const testCaseCheckerApi = {
+  run: (batchId: string) =>
+    fromResponse<TestCaseJobResponse>(testCaseHttp.post(`/test-generation/checker/batch/${encodeURIComponent(batchId)}`)),
+  latestRun: (batchId: string) =>
+    nullableFromResponse<TestCaseCheckerRun>(
+      testCaseHttp.get(`/test-generation/checker/batch/${encodeURIComponent(batchId)}/latest-run`),
+    ),
+  runs: (batchId: string) =>
+    fromResponse<TestCaseCheckerRun[]>(
+      testCaseHttp.get(`/test-generation/checker/batch/${encodeURIComponent(batchId)}/runs`),
+    ),
+  resultsByBatch: (batchId: string) =>
+    fromResponse<TestCaseCheckerResult[]>(
+      testCaseHttp.get(`/test-generation/checker/batch/${encodeURIComponent(batchId)}/results`),
+    ),
+  resultsByTestCase: (testCaseId: string) =>
+    fromResponse<TestCaseCheckerResult[]>(
+      testCaseHttp.get(`/test-generation/checker/test-cases/${encodeURIComponent(testCaseId)}/results`),
+    ),
+  latestResultByTestCase: (testCaseId: string) =>
+    nullableFromResponse<TestCaseCheckerResult>(
+      testCaseHttp.get(`/test-generation/checker/test-cases/${encodeURIComponent(testCaseId)}/latest-result`),
+    ),
+  resultsByJob: (jobId: string) =>
+    fromResponse<TestCaseCheckerResult[]>(
+      testCaseHttp.get(`/test-generation/checker/jobs/${encodeURIComponent(jobId)}/results`),
+    ),
+}
+
 export const rewriteApi = {
   group: (payload: {
+    atomicRuleId: string
     semanticRuleId: string
     workflowId: string
     rewriteMode: 'CHECKER_FEEDBACK' | 'HUMAN_FEEDBACK'
     humanFeedback?: string
   }) => fromResponse<JobResponse>(http.post(atomicPath('/rewrite/group'), payload)),
+  semanticGroup: (payload: {
+    semanticRuleId: string
+    workflowId: string
+    rewriteMode: 'CHECKER_FEEDBACK' | 'HUMAN_FEEDBACK'
+    humanFeedback?: string
+  }) => fromResponse<JobResponse>(http.post(atomicPath('/rewrite/semantic-group'), payload)),
 }
 
 export const skillsApi = {
@@ -473,14 +1026,76 @@ export const applicationLogsApi = {
 export const traceLogsApi = {
   getByJobId: (jobId: string) =>
     fromResponse<JobTraceResponse>(http.get(`/trace/jobs/${encodeURIComponent(jobId)}`)),
+  getByWorkflowId: (workflowId: string) =>
+    fromResponse<WorkflowTraceResponse>(http.get(`/trace/workflows/${encodeURIComponent(workflowId)}`)),
+}
+
+// ---------------------------------------------------------------------------
+// Metrics API
+// ---------------------------------------------------------------------------
+
+export type TokenCostParams = {
+  workflowId?: string
+  jobId?: string
+  from?: string
+  to?: string
+}
+
+export type TokenCostResponse = {
+  filters: {
+    workflowId: string | null
+    jobId: string | null
+    from: string | null
+    to: string | null
+  }
+  metrics: {
+    llmCallCount: number
+    toolCallCount: number
+    llmPromptTokens: number
+    llmCompletionTokens: number
+    toolPromptTokens: number
+    toolCompletionTokens: number
+  }
+}
+
+export type CheckerPassRateJob = {
+  jobId: string
+  jobType: string
+  passRate: number
+  totalCheckerResults: number
+  passedCheckerResults: number
+}
+
+export type CheckerPassRateResponse = {
+  workflowId: string
+  passRate: number
+  totalCheckerResults: number
+  passedCheckerResults: number
+  jobs: CheckerPassRateJob[]
+}
+
+export const metricsApi = {
+  tokenCost: (params: TokenCostParams) =>
+    fromResponse<TokenCostResponse>(http.get('/metrics/token-cost', { params })),
+  checkerPassRate: (workflowId: string) =>
+    fromResponse<CheckerPassRateResponse>(
+      http.get('/metrics/checker-pass-rate', { params: { workflowId } }),
+    ),
+}
+
+export function normalizeJobStatus(status?: string | null) {
+  const normalized = (status || 'UNKNOWN').trim().toUpperCase()
+  return normalized === 'COMPLETED' ? 'SUCCEEDED' : normalized
 }
 
 export function isJobRunning(status?: string | null) {
-  return status === 'QUEUED' || status === 'RUNNING'
+  const normalized = normalizeJobStatus(status)
+  return normalized === 'QUEUED' || normalized === 'RUNNING'
 }
 
 export function isJobDone(status?: string | null) {
-  return status === 'SUCCEEDED' || status === 'FAILED'
+  const normalized = normalizeJobStatus(status)
+  return normalized === 'SUCCEEDED' || normalized === 'FAILED' || normalized === 'PARTIAL_SUCCESS' || normalized === 'FAILED_UNKNOWN_TERMS'
 }
 
 export function getErrorMessage(error: unknown) {
@@ -527,4 +1142,59 @@ function semanticJsonField(value: string | null | undefined, fieldName: string) 
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
   const fieldValue = (parsed as JsonRecord)[fieldName]
   return typeof fieldValue === 'string' && fieldValue.trim() ? fieldValue : null
+}
+
+// ---------------------------------------------------------------------------
+// Knowledge Base API (separate backend on port 8080, REST root /api/documents)
+// ---------------------------------------------------------------------------
+
+const kbHttp = axios.create({
+  baseURL: '/kb-api',
+  headers: { Accept: 'application/json' },
+})
+
+export type KbDocumentStatus = 'ingesting' | 'active' | 'failed' | 'outdated' | 'archived'
+
+export type KbDocument = {
+  id: number
+  name: string
+  docType?: string | null
+  status: KbDocumentStatus
+  version?: string | null
+  pageCount?: number | null
+  fileName?: string | null
+  fileSize?: number | null
+  uploadedAt: string
+  indexedAt?: string | null
+}
+
+export interface SectionTreeNode {
+  sectionId: number
+  title: string | null
+  level: number | null
+  path: string | null
+  summary: string | null
+  children: SectionTreeNode[]
+}
+
+export type KbDocumentOutline = SectionTreeNode[]
+
+export const knowledgeBaseApi = {
+  list: (status?: KbDocumentStatus) =>
+    fromResponse<KbDocument[]>(kbHttp.get('/documents', { params: { status } })),
+  outline: (id: number) =>
+    fromResponse<KbDocumentOutline>(kbHttp.get(`/documents/${encodeURIComponent(id)}/outline`)),
+  upload: (file: File) => {
+    const body = new FormData()
+    body.append('file', file)
+    return fromResponse<KbDocument>(
+      kbHttp.post('/documents', body, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      }),
+    )
+  },
+  updateVersionStatus: (id: number, status: 'outdated' | 'archived') =>
+    fromResponse<KbDocument>(kbHttp.put(`/documents/${encodeURIComponent(id)}/version`, { status })),
+  delete: (id: number) =>
+    optionalFromResponse<void>(kbHttp.delete(`/documents/${encodeURIComponent(id)}`)),
 }

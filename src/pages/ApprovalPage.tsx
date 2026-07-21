@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 import { atomicCheckerApi, atomicRulesApi, getAtomicRuleCode, getAtomicRuleSemanticCode, getErrorMessage } from '../api'
 import { useAppStore } from '../store'
 import { formatDate } from '../utils'
-import { Button, EmptyState, ErrorNotice, JsonViewButton, PageTitle, Panel, PanelHeader, StatusPill } from '../components/ui'
+import { Button, EmptyState, ErrorNotice, JsonViewButton, PageTitle, Panel, PanelHeader, StatusPill, StickyScrollX } from '../components/ui'
 
 export function ApprovalPage() {
   const { workflowId = '' } = useParams()
@@ -68,7 +68,7 @@ export function ApprovalPage() {
         {atomicRules.length === 0 && !atomicRulesQuery.isLoading ? (
           <div className="p-4"><EmptyState title="No atomic rules" description="Run atomic maker from the workflow page." /></div>
         ) : (
-          <div className="overflow-x-auto">
+          <StickyScrollX>
             <table className="w-full min-w-[1040px] border-collapse text-left text-sm">
               <thead className="bg-[#f8fafc] text-xs uppercase text-[#667085]">
                 <tr>
@@ -115,7 +115,7 @@ export function ApprovalPage() {
                 })}
               </tbody>
             </table>
-          </div>
+          </StickyScrollX>
         )}
       </Panel>
     </div>

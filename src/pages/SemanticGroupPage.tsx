@@ -21,7 +21,7 @@ import {
 import { usePolledJob } from '../hooks'
 import { useAppStore } from '../store'
 import { formatDate } from '../utils'
-import { Button, EmptyState, ErrorNotice, JsonViewButton, Label, PageTitle, Panel, PanelHeader, Select, StatusPill, TextArea } from '../components/ui'
+import { Button, EmptyState, ErrorNotice, JsonViewButton, Label, PageTitle, Panel, PanelHeader, Select, StatusPill, StickyScrollX, TextArea } from '../components/ui'
 
 export function SemanticGroupPage() {
   const { workflowId = '', semanticRuleId = '' } = useParams()
@@ -93,7 +93,7 @@ export function SemanticGroupPage() {
 
   const rewriteMutation = useMutation({
     mutationFn: () =>
-      rewriteApi.group({
+      rewriteApi.semanticGroup({
         semanticRuleId,
         workflowId,
         rewriteMode,
@@ -206,7 +206,7 @@ export function SemanticGroupPage() {
         {childAtomicRules.length === 0 && !atomicRulesQuery.isLoading ? (
           <div className="p-4"><EmptyState title="No child atomic rules" description="Run atomic maker after semantic approval." /></div>
         ) : (
-          <div className="overflow-x-auto">
+          <StickyScrollX>
             <table className="w-full min-w-[920px] border-collapse text-left text-sm">
               <thead className="bg-[#f8fafc] text-xs uppercase text-[#667085]">
                 <tr>
@@ -240,7 +240,7 @@ export function SemanticGroupPage() {
                 })}
               </tbody>
             </table>
-          </div>
+          </StickyScrollX>
         )}
       </Panel>
 
