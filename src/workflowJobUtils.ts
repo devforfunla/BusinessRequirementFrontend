@@ -12,7 +12,8 @@ export function latestStageJob(jobs: AsyncJob[]): AsyncJob | null {
 export function deriveStageStatus(jobs: AsyncJob[]): string {
   if (jobs.length === 0) return 'NOT_STARTED'
   if (jobs.some((job) => isJobRunning(job.status))) return 'RUNNING'
-  return normalizeJobStatus(latestStageJob(jobs)?.status)
+  const latest = latestStageJob(jobs)
+  return normalizeJobStatus(latest?.derivedStatus || latest?.status)
 }
 
 function jobActivityTime(job: AsyncJob) {

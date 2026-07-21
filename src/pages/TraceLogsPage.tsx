@@ -158,10 +158,16 @@ export function TraceLogsPage() {
                   {workflowTrace.aggregate.failedJobs} failed
                 </span>
               ) : null}
-              {workflowTrace.aggregate.hasUnknownTerms ? (
+              {workflowTrace.aggregate.successWithUnknownJobs > 0 ? (
+                <span className="inline-flex items-center gap-1 rounded border border-[#f5c97a] bg-[#fffbeb] px-2 py-0.5 text-xs font-medium text-[#b54708]">
+                  <AlertTriangle className="h-3 w-3" />
+                  {workflowTrace.aggregate.successWithUnknownJobs} with knowledge gaps
+                </span>
+              ) : null}
+              {workflowTrace.aggregate.failedWithUnknownJobs > 0 ? (
                 <span className="inline-flex items-center gap-1 rounded border border-[#f7b4ae] bg-[#fff1f0] px-2 py-0.5 text-xs font-medium text-[#b42318]">
                   <AlertTriangle className="h-3 w-3" />
-                  Knowledge Gaps
+                  {workflowTrace.aggregate.failedWithUnknownJobs} failed + gaps
                 </span>
               ) : null}
             </div>
@@ -206,8 +212,9 @@ function JobRow({
     enabled: isExpanded,
   })
 
-  const isFailed = job.status === 'FAILED' || job.status === 'FAILED_UNKNOWN_TERMS'
-  const hasUnknownTerms = job.status === 'FAILED_UNKNOWN_TERMS'
+  const derived = job.derivedStatus
+  const isFailed = derived === 'FAILED' || derived === 'FAILED_WITH_UNKNOWN'
+  const hasUnknownTerms = derived === 'SUCCESS_WITH_UNKNOWN' || derived === 'FAILED_WITH_UNKNOWN'
 
   return (
     <div>
@@ -216,10 +223,10 @@ function JobRow({
         className={cn('flex w-full cursor-pointer items-center gap-3 px-4 py-2.5 text-left text-sm hover:bg-[#f8fafc]', isFailed && 'border-l-2 border-l-[#f7b4ae]')}
       >
         <span className="min-w-[140px] font-medium text-[#172033]">{job.jobType}</span>
-        <StatusPill value={job.status} />
+        <StatusPill value={job.derivedStatus || job.status} />
         <span className="text-xs text-[#98a2b3]">{formatDate(job.createdAt)}</span>
         {hasUnknownTerms ? (
-          <AlertTriangle className="h-3.5 w-3.5 text-[#b42318]" />
+          <AlertTriangle className="h-3.5 w-3.5 text-[#b54708]" />
         ) : null}
         {job.errorMessage ? (
           <span className="truncate text-xs text-[#667085]">{job.errorMessage}</span>

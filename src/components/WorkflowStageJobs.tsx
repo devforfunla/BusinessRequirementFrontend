@@ -33,7 +33,7 @@ export function WorkflowStageJobs({
                   <p className="text-sm font-semibold text-[#172033]">{job.jobType}</p>
                   <p className="mt-1 truncate font-mono text-xs text-[#667085]">{job.id}</p>
                 </div>
-                <StatusPill value={job.status} />
+                <StatusPill value={job.derivedStatus || job.status} />
               </div>
               <div className="mt-3 grid gap-2 text-xs text-[#667085] sm:grid-cols-2">
                 <span className="inline-flex items-center gap-1.5">
@@ -73,7 +73,7 @@ export function JobSummaryCard({ title, job }: { title: string; job?: AsyncJob |
     <div className="flex h-full flex-col rounded-md border border-[#d8dee8] bg-[#fbfcfe] p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm font-semibold text-[#344054]">{title}</p>
-        <StatusPill value={job.status} />
+        <StatusPill value={job.derivedStatus || job.status} />
       </div>
       <p className="mt-2 font-mono text-xs text-[#667085]">{job.id}</p>
       {job.resultPayload ? <JsonViewButton title="Result" value={job.resultPayload} label="View Result" /> : null}

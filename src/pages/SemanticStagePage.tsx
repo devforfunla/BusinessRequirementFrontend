@@ -1,7 +1,8 @@
-import { type ReactNode, useEffect, useState } from 'react'
+import { Fragment, type ReactNode, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  AlertTriangle,
   ArrowRight,
   CheckCircle2,
   Edit3,
@@ -156,25 +157,9 @@ export function SemanticStagePage() {
   useEffect(() => {
     const job = jobQuery.data
     if (!job) return
-    if (job.status === 'SUCCEEDED' || job.status === 'PARTIAL_SUCCESS') {
-      if (job.status === 'PARTIAL_SUCCESS') {
-        toast.warning(`${semanticJobSuccessMessage(job.jobType)} (partial success)`)
-      } else {
-        toast.success(semanticJobSuccessMessage(job.jobType))
-      }
-      window.setTimeout(() => setActiveJobId(null), 0)
-      void queryClient.invalidateQueries()
-      // Re-run maker creates a new workflow — navigate to it
-      if (job.jobType === 'SEMANTIC_MAKER' && job.workflowId && job.workflowId !== workflowId) {
-        setWorkflowId(job.workflowId)
-        navigate(`/workflows/${encodeURIComponent(job.workflowId)}/semantic`)
-      }
-    }
-    if (job.status === 'FAILED') {
-      toast.error(job.errorMessage || semanticJobFailureMessage(job.jobType))
-      window.setTimeout(() => setActiveJobId(null), 0)
-    }
-    if (job.status === 'FAILED_UNKNOWN_TERMS') {
+    // Derived statuses must come first — they refine raw status with more context
+    if (job.derivedStatus === 'SUCCESS_WITH_UNKNOWN' || job.status === 'FAILED_UNKNOWN_TERMS') {
+      toast.warning(`${semanticJobSuccessMessage(job.jobType)} with knowledge gaps`)
       traceLogsApi.getByJobId(job.id).then((trace) => {
         const allTerms = trace.agentSessions.flatMap((s) => s.unknownTerms)
         if (allTerms.length > 0) {
@@ -183,6 +168,38 @@ export function SemanticStagePage() {
       }).catch(() => {
         toast.error('Failed to load unknown terms')
       })
+      window.setTimeout(() => setActiveJobId(null), 0)
+      void queryClient.invalidateQueries()
+      if (job.jobType === 'SEMANTIC_MAKER' && job.workflowId && job.workflowId !== workflowId) {
+        setWorkflowId(job.workflowId)
+        navigate(`/workflows/${encodeURIComponent(job.workflowId)}/semantic`)
+      }
+    } else if (job.derivedStatus === 'FAILED_WITH_UNKNOWN') {
+      toast.error(job.errorMessage || `${semanticJobFailureMessage(job.jobType)} with knowledge gaps`)
+      traceLogsApi.getByJobId(job.id).then((trace) => {
+        const allTerms = trace.agentSessions.flatMap((s) => s.unknownTerms)
+        if (allTerms.length > 0) {
+          setUnknownTerms({ jobType: job.jobType, terms: allTerms })
+        }
+      }).catch(() => {
+        toast.error('Failed to load unknown terms')
+      })
+      window.setTimeout(() => setActiveJobId(null), 0)
+    } else if (job.status === 'SUCCEEDED' || job.status === 'PARTIAL_SUCCESS') {
+      if (job.status === 'PARTIAL_SUCCESS') {
+        toast.warning(`${semanticJobSuccessMessage(job.jobType)} (partial success)`)
+      } else {
+        toast.success(semanticJobSuccessMessage(job.jobType))
+      }
+      window.setTimeout(() => setActiveJobId(null), 0)
+      void queryClient.invalidateQueries()
+      if (job.jobType === 'SEMANTIC_MAKER' && job.workflowId && job.workflowId !== workflowId) {
+        setWorkflowId(job.workflowId)
+        navigate(`/workflows/${encodeURIComponent(job.workflowId)}/semantic`)
+      }
+    } else if (job.status === 'FAILED') {
+      toast.error(job.errorMessage || semanticJobFailureMessage(job.jobType))
+      window.setTimeout(() => setActiveJobId(null), 0)
     }
   }, [jobQuery.data, queryClient, navigate, workflowId, setWorkflowId])
 
@@ -932,6 +949,8 @@ function CheckerSummary({ title, run }: { title: string; run?: CheckerRun | null
 
 function JobHistoryTable({ jobs, jobTypes }: { jobs: AsyncJob[]; jobTypes: string[] }) {
   const [compareJob, setCompareJob] = useState<AsyncJob | null>(null)
+  const [expandedTermsJobId, setExpandedTermsJobId] = useState<string | null>(null)
+  const [termsCache, setTermsCache] = useState<Record<string, UnknownTerm[]>>({})
 
   const stageJobs = jobs
     .filter((j) => jobTypes.includes(j.jobType))
@@ -963,18 +982,23 @@ function JobHistoryTable({ jobs, jobTypes }: { jobs: AsyncJob[]; jobTypes: strin
               <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Created</th>
               <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Error</th>
               <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Result</th>
+              <th className="border-b border-[#e3e8f0] px-4 py-3 font-semibold">Trace</th>
             </tr>
           </thead>
           <tbody>
             {stageJobs.map((job, index) => {
               const isEdit = job.jobType === 'SEMANTIC_EDIT' || job.jobType === 'SEMANTIC_REWRITE'
+              const hasUnknownTerms = job.derivedStatus === 'SUCCESS_WITH_UNKNOWN' || job.derivedStatus === 'FAILED_WITH_UNKNOWN' || job.status === 'FAILED_UNKNOWN_TERMS'
+              const isExpanded = expandedTermsJobId === job.id
+              const terms = termsCache[job.id]
               return (
-                <tr key={job.id} className="border-b border-[#edf1f6] align-top last:border-0">
+                <Fragment key={job.id}>
+                <tr className="border-b border-[#edf1f6] align-top last:border-0">
                   <td className="px-4 py-3 text-[#667085]">{stageJobs.length - index}</td>
                   <td className="px-4 py-3">
                     <JobTypePill jobType={job.jobType} />
                   </td>
-                  <td className="px-4 py-3"><StatusPill value={job.status} /></td>
+                  <td className="px-4 py-3"><StatusPill value={job.derivedStatus || job.status} /></td>
                   <td className="px-4 py-3">
                     <span className="font-mono text-xs text-[#667085]">{job.id}</span>
                   </td>
@@ -995,7 +1019,56 @@ function JobHistoryTable({ jobs, jobTypes }: { jobs: AsyncJob[]; jobTypes: strin
                       ) : null}
                     </div>
                   </td>
+                  <td className="px-4 py-3">
+                    {hasUnknownTerms ? (
+                      <Button
+                        size="sm"
+                        variant={job.derivedStatus === 'SUCCESS_WITH_UNKNOWN' ? 'secondary' : 'danger'}
+                        title="View unknown terms"
+                        onClick={async () => {
+                          if (isExpanded) {
+                            setExpandedTermsJobId(null)
+                          } else {
+                            if (!termsCache[job.id]) {
+                              try {
+                                const trace = await traceLogsApi.getByJobId(job.id)
+                                const allTerms = trace.agentSessions.flatMap((s) => s.unknownTerms)
+                                setTermsCache((prev) => ({ ...prev, [job.id]: allTerms }))
+                              } catch { /* ignore */ }
+                            }
+                            setExpandedTermsJobId(job.id)
+                          }
+                        }}
+                      >
+                        <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
+                        Terms
+                      </Button>
+                    ) : null}
+                  </td>
                 </tr>
+                {isExpanded && terms ? (
+                  <tr>
+                    <td colSpan={9} className="border-b border-[#f5c97a] bg-[#fffbeb] px-4 py-3">
+                      <div className="space-y-2">
+                        <p className="text-sm font-semibold text-[#b54708]">
+                          Missing terms ({terms.length})
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {terms.map((term, i) => (
+                            <span
+                              key={i}
+                              className="rounded border border-[#f5c97a] bg-white px-2 py-0.5 text-xs text-[#b54708]"
+                              title={term.reason}
+                            >
+                              {term.query}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                ) : null}
+                </Fragment>
               )
             })}
           </tbody>

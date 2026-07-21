@@ -195,21 +195,8 @@ export function AtomicStagePage() {
         return next
       })
     }
-    if (job.status === 'SUCCEEDED') {
-      toast.success(`${formatJobType(job.jobType)} completed`)
-      window.setTimeout(complete, 0)
-      void queryClient.invalidateQueries()
-    }
-    if (job.status === 'PARTIAL_SUCCESS') {
-      toast.warning(`${formatJobType(job.jobType)} completed with partial success`)
-      window.setTimeout(complete, 0)
-      void queryClient.invalidateQueries()
-    }
-    if (job.status === 'FAILED') {
-      toast.error(job.errorMessage || `${formatJobType(job.jobType)} failed`)
-      window.setTimeout(complete, 0)
-    }
-    if (job.status === 'FAILED_UNKNOWN_TERMS') {
+    if (job.derivedStatus === 'SUCCESS_WITH_UNKNOWN' || job.status === 'FAILED_UNKNOWN_TERMS') {
+      toast.warning(`${formatJobType(job.jobType)} completed with knowledge gaps`)
       traceLogsApi.getByJobId(job.id).then((trace) => {
         const allTerms = trace.agentSessions.flatMap((s) => s.unknownTerms)
         if (allTerms.length > 0) {
@@ -218,6 +205,29 @@ export function AtomicStagePage() {
       }).catch(() => {
         toast.error('Failed to load unknown terms')
       })
+      window.setTimeout(complete, 0)
+      void queryClient.invalidateQueries()
+    } else if (job.derivedStatus === 'FAILED_WITH_UNKNOWN') {
+      toast.error(job.errorMessage || `${formatJobType(job.jobType)} failed with knowledge gaps`)
+      traceLogsApi.getByJobId(job.id).then((trace) => {
+        const allTerms = trace.agentSessions.flatMap((s) => s.unknownTerms)
+        if (allTerms.length > 0) {
+          setUnknownTerms({ jobType: job.jobType, terms: allTerms })
+        }
+      }).catch(() => {
+        toast.error('Failed to load unknown terms')
+      })
+      window.setTimeout(complete, 0)
+    } else if (job.status === 'SUCCEEDED') {
+      toast.success(`${formatJobType(job.jobType)} completed`)
+      window.setTimeout(complete, 0)
+      void queryClient.invalidateQueries()
+    } else if (job.status === 'PARTIAL_SUCCESS') {
+      toast.warning(`${formatJobType(job.jobType)} completed with partial success`)
+      window.setTimeout(complete, 0)
+      void queryClient.invalidateQueries()
+    } else if (job.status === 'FAILED') {
+      toast.error(job.errorMessage || `${formatJobType(job.jobType)} failed`)
       window.setTimeout(complete, 0)
     }
   }, [jobQuery.data, queryClient])
@@ -1519,7 +1529,7 @@ function JobHistoryTable({ jobs, jobTypes }: { jobs: AsyncJob[]; jobTypes: strin
                     <td className="px-4 py-3">
                       <JobTypePill jobType={job.jobType} />
                     </td>
-                    <td className="px-4 py-3"><StatusPill value={job.status} /></td>
+                    <td className="px-4 py-3"><StatusPill value={job.derivedStatus || job.status} /></td>
                     <td className="px-4 py-3">
                       <span className="font-mono text-xs text-[#667085]">{job.id}</span>
                     </td>
@@ -1552,10 +1562,10 @@ function JobHistoryTable({ jobs, jobTypes }: { jobs: AsyncJob[]; jobTypes: strin
                     <td className="px-4 py-3">
                       <div className="flex gap-1">
                         <LlmTraceButton jobId={job.id} />
-                        {job.status === 'FAILED_UNKNOWN_TERMS' ? (
+                        {(job.derivedStatus === 'SUCCESS_WITH_UNKNOWN' || job.derivedStatus === 'FAILED_WITH_UNKNOWN' || job.status === 'FAILED_UNKNOWN_TERMS') ? (
                           <Button
                             size="sm"
-                            variant="danger"
+                            variant={job.derivedStatus === 'SUCCESS_WITH_UNKNOWN' ? 'secondary' : 'danger'}
                             title="View unknown terms"
                             onClick={async (e) => {
                               e.stopPropagation()
@@ -1583,16 +1593,16 @@ function JobHistoryTable({ jobs, jobTypes }: { jobs: AsyncJob[]; jobTypes: strin
                   </tr>
                   {expandedTermsJobId === job.id && termsCache[job.id] ? (
                     <tr>
-                      <td colSpan={11} className="border-b border-[#f7b4ae] bg-[#fffcfc] px-4 py-3">
+                      <td colSpan={11} className={job.derivedStatus === 'SUCCESS_WITH_UNKNOWN' ? 'border-b border-[#f5c97a] bg-[#fffbeb] px-4 py-3' : 'border-b border-[#f7b4ae] bg-[#fffcfc] px-4 py-3'}>
                         <div className="space-y-2">
-                          <p className="text-sm font-semibold text-[#b42318]">
+                          <p className={job.derivedStatus === 'SUCCESS_WITH_UNKNOWN' ? 'text-sm font-semibold text-[#b54708]' : 'text-sm font-semibold text-[#b42318]'}>
                             Missing terms ({termsCache[job.id].length})
                           </p>
                           <div className="flex flex-wrap gap-1.5">
                             {termsCache[job.id].map((term, i) => (
                               <span
                                 key={i}
-                                className="rounded border border-[#f7b4ae] bg-[#fff1f0] px-2 py-0.5 text-xs text-[#b42318]"
+                                className={job.derivedStatus === 'SUCCESS_WITH_UNKNOWN' ? 'rounded border border-[#f5c97a] bg-white px-2 py-0.5 text-xs text-[#b54708]' : 'rounded border border-[#f7b4ae] bg-[#fff1f0] px-2 py-0.5 text-xs text-[#b42318]'}
                                 title={term.reason}
                               >
                                 {term.query}
@@ -1835,7 +1845,7 @@ function LlmTraceButton({ jobId }: { jobId: string }) {
                       <h3 className="mb-2 text-sm font-medium text-[#475467]">
                         Session #{si + 1} — {s.session.finalStatus} — {s.session.totalTokens ?? 0} tokens
                       </h3>
-                      {s.session.finalStatus === 'FAILED_UNKNOWN_TERMS' && s.unknownTerms && s.unknownTerms.length > 0 ? (
+                      {s.unknownTerms && s.unknownTerms.length > 0 ? (
                         <div className="mb-3 rounded-md border border-[#f7b4ae] bg-[#fff1f0] px-3 py-2">
                           <p className="text-xs font-semibold text-[#b42318]">
                             Missing terms ({s.unknownTerms.length})

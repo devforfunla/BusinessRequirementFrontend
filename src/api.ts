@@ -44,6 +44,7 @@ export type AsyncJob = {
   documentId?: string | null
   jobType: string
   status: string
+  derivedStatus?: string | null
   inputPayload?: string | null
   resultPayload?: string | null
   errorMessage?: string | null
@@ -542,6 +543,7 @@ export type JobTraceSummary = {
   id: string
   jobType: string
   status: string
+  derivedStatus: string
   errorMessage?: string | null
   createdAt: string
 }
@@ -549,7 +551,8 @@ export type JobTraceSummary = {
 export type WorkflowTraceAggregate = {
   totalJobs: number
   failedJobs: number
-  hasUnknownTerms: boolean
+  successWithUnknownJobs: number
+  failedWithUnknownJobs: number
 }
 
 export type WorkflowTraceResponse = {
@@ -636,6 +639,7 @@ export type AgentTrace = {
 
 export type JobTraceResponse = {
   job: AsyncJob
+  derivedStatus: string
   workflow?: WorkflowTraceRecord | null
   agentSessions: AgentTrace[]
   unscopedLlmCalls: LlmCallTrace[]
@@ -1091,7 +1095,7 @@ export function isJobRunning(status?: string | null) {
 
 export function isJobDone(status?: string | null) {
   const normalized = normalizeJobStatus(status)
-  return normalized === 'SUCCEEDED' || normalized === 'FAILED' || normalized === 'PARTIAL_SUCCESS'
+  return normalized === 'SUCCEEDED' || normalized === 'FAILED' || normalized === 'PARTIAL_SUCCESS' || normalized === 'FAILED_UNKNOWN_TERMS'
 }
 
 export function getErrorMessage(error: unknown) {
